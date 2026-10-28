@@ -8,8 +8,33 @@ import AppKit
 @MainActor
 final class PanelController {
 
+    /// An interaction outside the panel that may auto-close it (Task 5).
+    nonisolated enum OutsideEvent: Equatable {
+        case leftMouseDown(at: CGPoint)
+        case applicationActivated(bundleID: String?)
+    }
+
+    /// Pure close decision for an outside interaction (unit-tested).
+    nonisolated static func shouldClose(
+        for event: OutsideEvent,
+        panelFrame: CGRect,
+        selfBundleID: String
+    ) -> Bool {
+        switch event {
+        case .leftMouseDown(let location):
+            return !panelFrame.contains(location)
+        case .applicationActivated(let bundleID):
+            // Activating our own app (e.g. opening the debug window) keeps the panel.
+            return bundleID != selfBundleID
+        }
+    }
+
     private let panel: PastePanel
     private let model: PanelModel
+    private let selfBundleID = Bundle.main.bundleIdentifier ?? "com.ebs.pspaste"
+
+    private var outsideMouseMonitor: Any?
+    private var appActivationObserver: NSObjectProtocol?
 
     var isVisible: Bool { panel.isVisible }
 
@@ -54,7 +79,6 @@ final class PanelController {
         panel.makeKey()
 
         model.prepareForShow()
-        model.focusSignal += 1
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Theme.Panel.animationDuration
@@ -62,6 +86,8 @@ final class PanelController {
             panel.animator().setFrame(frame, display: true)
             panel.animator().alphaValue = 1
         }
+
+        installOutsideInteractionMonitors()
     }
 
     /// Orders the panel out instantly with no animation.
@@ -70,11 +96,13 @@ final class PanelController {
     /// otherwise the keystroke would be delivered to the panel itself
     /// (ARCHITECTURE §7 timing note).
     func closeImmediately() {
+        removeOutsideInteractionMonitors()
         panel.orderOut(nil)
         panel.alphaValue = 1
     }
 
     func close() {
+        removeOutsideInteractionMonitors()
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = Theme.Panel.animationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
@@ -85,6 +113,67 @@ final class PanelController {
         }) {
             self.panel.orderOut(nil)
             self.panel.alphaValue = 1
+        }
+    }
+
+    // MARK: - Outside-interaction monitors (Task 5)
+
+    /// The app never activates, so the panel never gets resignKey/deactivate
+    /// notifications when the user works elsewhere — closing on outside
+    /// interaction must be detected actively while the panel is visible.
+    ///
+    /// The global mouse monitor never sees events delivered to our own app,
+    /// so clicking the menu bar icon or its menu does not dismiss the panel.
+    private func installOutsideInteractionMonitors() {
+        guard outsideMouseMonitor == nil, appActivationObserver == nil else { return }
+
+        outsideMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated { self.handleGlobalMouseDown() }
+        }
+        appActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard let self else { return }
+            MainActor.assumeIsolated { self.handleApplicationActivated(app?.bundleIdentifier) }
+        }
+    }
+
+    private func removeOutsideInteractionMonitors() {
+        if let outsideMouseMonitor {
+            NSEvent.removeMonitor(outsideMouseMonitor)
+            self.outsideMouseMonitor = nil
+        }
+        if let appActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(appActivationObserver)
+            self.appActivationObserver = nil
+        }
+    }
+
+    private func handleGlobalMouseDown() {
+        guard panel.isVisible else { return }
+        // Global monitor events have no window; use screen coordinates.
+        let location = NSEvent.mouseLocation
+        if Self.shouldClose(
+            for: .leftMouseDown(at: location),
+            panelFrame: panel.frame,
+            selfBundleID: selfBundleID
+        ) {
+            close()
+        }
+    }
+
+    private func handleApplicationActivated(_ bundleID: String?) {
+        guard panel.isVisible else { return }
+        if Self.shouldClose(
+            for: .applicationActivated(bundleID: bundleID),
+            panelFrame: panel.frame,
+            selfBundleID: selfBundleID
+        ) {
+            close()
         }
     }
 
