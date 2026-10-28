@@ -14,6 +14,9 @@
     覆盖去重闭包、Concealed/Transient 跳过、暂停/恢复、自身写回防回环、
     历史上限清理（固定项保留 + payload 清理）、payload 仅存路径。
 - [x] 任务三：PasteService（写回 + 辅助功能 + 模拟 ⌘V）+ 菜单栏入口（2026-10-27 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务四：热键注册失败的可见提示与冲突处理（2026-10-27 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务五：面板点击外部自动收起（2026-10-27 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务六：面板选中响应速度与选中态视觉优化（2026-10-27 完成，A 类已过；B 类人工验证待确认）
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
 - [ ] 搜索过滤、Pinboard（单收藏夹）
@@ -62,3 +65,32 @@
   icon.icns 作 App 图标 + png 作菜单栏图标，非模板渲染）；开发期关闭 LSUIElement
   （Dock 可见，M3 再评估）；12→15 测试外新增插桩已清理，编译零警告。
   实测确认：Dock 图标可见、⌘⇧` 唤出面板、状态栏图标存在。
+- 2026-10-27：任务四完成。HotKeyService 重构：注册结果经 `onRegistrationStateChange`
+  （.registered/.failed）回调装配层（模块内不弹 UI，print 已全部移除）；失败每 30s
+  自动重试（注入时钟 + 纯函数 `shouldRetry(lastFailureAt:now:interval:)`，Carbon 注册
+  本身可注入脚本化序列便于测试）；SystemNotifier（UNUserNotificationCenter，授权
+  请求仅一次，被拒降级为仅菜单栏警示，授权/投递均可注入）；菜单栏三级提示中的两级：
+  图标换 exclamationmark.triangle.fill + 菜单顶部禁用项“Hotkey in use by another app”
+  （menuNeedsUpdate 刷新）。加分项（点名冲突应用）跳过：Carbon 不暴露热键所有者，
+  NSWorkspace 无法可靠推断注册方，不做猜测式提示。
+- 2026-10-27：任务五完成。PanelController 可见期主动监听（非激活面板收不到
+  resignKey/deactivate，按任务单机制判断实现）：show() 末尾安装、close()/
+  closeImmediately() 成对幂等移除；NSEvent 全局鼠标按下（panel.frame.contains 判定，
+  全局监听天然收不到发往本应用自身的事件，点菜单栏不收起）+
+  NSWorkspace.didActivateApplicationNotification（覆盖 ⌘Tab/Dock 切换，本应用
+  activate 不收起）；“是否收起”抽为纯函数 `shouldClose(for:panelFrame:selfBundleID:)`
+  并单测（内/外点击、他应用/本应用激活）。两任务完成后 xcodebuild test 25/25 通过、
+  Debug 0 error 0 警告。
+- 2026-10-27：任务六完成（A→B→C）。根因排查：① 任何选中变化都触发
+  withAnimation(scrollTo)（点击可见卡片也滚动）；② LazyHStack 滚动回收时 .task
+  重跑重复读盘（选中切换本身不重解码）；③ 整卡 0.18s 隐式动画使描边/缩放慢半拍；
+  ④（新发现）onTapGesture(1)+(2) 共存使单击延迟 ~0.3s 等双击判定。修复：滚动门控抽
+  纯函数 shouldScrollToSelection（来源 × 可见性，点击可见不滚动、键盘导航保留平滑
+  滚动）；ThumbnailCache（NSCache，payloadPath 为键，UI 层）；选中样式当帧切换仅缩放
+  保留 0.1s；单击手势 + 手动双击判定。B：移除唤出自动聚焦（focusSignal 机制删除），
+  搜索框 icon 态（放大镜 + 提示文字 + 胶囊底），可打印字符键面板级路由
+  （searchAppendText 纯函数：聚焦 + 追加；⌘ 组合键/控制字符不追加）。C：按 UI.md §5.1
+  三层配色（浅色暖纸 #F5F4ED/#FAF9F4/#1B365D，深色暖灰 #26221E/#37332D/#5B7DB1），
+  选中 = 2pt 描边 + 8% 填充 + 1.02 缩放，色值全在 Theme 语义化命名，grep 自查视图
+  无内联常量。xcodebuild test 32/32 通过、Debug 0 error 0 警告；浅色/深色截图待
+  B 类人工验证。

@@ -8,6 +8,7 @@ struct HistoryPanelView: View {
 
     @Query(sort: \ClipboardItem.createdAt, order: .reverse) private var allItems: [ClipboardItem]
     @FocusState private var searchFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     /// Text-field filtering (simple search; full search is M2).
     private var items: [ClipboardItem] {
@@ -27,7 +28,13 @@ struct HistoryPanelView: View {
             historyArea
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.ultraThinMaterial)
+        .background {
+            // §5.1: translucent material with a warm tint layered on top.
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                Theme.ColorToken.panelTint(colorScheme)
+            }
+        }
         .clipShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: Theme.Panel.cornerRadius,
@@ -36,9 +43,6 @@ struct HistoryPanelView: View {
         )
         .contentShape(Rectangle())
         .onKeyPress { press in pressHandler(press) }
-        .onChange(of: model.focusSignal) {
-            searchFocused = true
-        }
         .overlay(alignment: .top) {
             if model.showsManualPasteHint {
                 Text("Copied — press ⌘V to paste")
@@ -56,12 +60,19 @@ struct HistoryPanelView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search clipboard history", text: $model.searchText)
-                .textFieldStyle(.plain)
-                .focused($searchFocused)
-                .onSubmit { model.confirmSelection(in: items) }
+            // Icon-state search field: unfocused it reads as magnifier + hint
+            // (UI.md §2.3); clicking it (or typing a character) enters input mode.
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search clipboard history", text: $model.searchText)
+                    .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .onSubmit { model.confirmSelection(in: items) }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Theme.ColorToken.searchBarBackground, in: Capsule())
             Spacer()
             Button("Pinboard") {}
                 .disabled(true)
@@ -86,7 +97,7 @@ struct HistoryPanelView: View {
                             item: item,
                             isSelected: item.id == effectiveSelectedID,
                             store: store,
-                            onSelect: { model.selectedID = item.id },
+                            onSelect: { model.selectViaMouse(item.id) },
                             onConfirm: { model.confirmSelection(in: items) }
                         )
                         .id(item.id)
@@ -102,6 +113,13 @@ struct HistoryPanelView: View {
             }
             .onChange(of: effectiveSelectedID, initial: false) { _, newValue in
                 guard let newValue else { return }
+                let source = model.selectionChangeSource
+                // A clicked card is on screen by definition; gating the scroll
+                // here removes the animated scrollTo that felt like click lag (Task 6-A).
+                guard PanelModel.shouldScrollToSelection(
+                    source: source,
+                    isTargetVisible: source == .mouseClick
+                ) else { return }
                 withAnimation(Theme.Panel.animation) {
                     proxy.scrollTo(newValue)
                 }
@@ -113,7 +131,7 @@ struct HistoryPanelView: View {
         VStack(spacing: 6) {
             Text("Copy something to get started")
                 .font(.headline)
-            Text("Press ⌘⇧V anywhere to open this panel")
+            Text("Press ⌘⇧` anywhere to open this panel")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -135,6 +153,16 @@ struct HistoryPanelView: View {
             model.confirmSelection(in: items)
             return .handled
         default:
+            // Type-to-search (UI.md §2.3): printable characters focus the field
+            // and append themselves; functional keys and ⌘ shortcuts pass through.
+            if let text = PanelModel.searchAppendText(
+                forCharacters: press.characters,
+                hasCommandModifiers: press.modifiers.contains(.command)
+            ) {
+                searchFocused = true
+                model.searchText.append(text)
+                return .handled
+            }
             return .ignored
         }
     }
