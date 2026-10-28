@@ -11,6 +11,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private let pauseItem = NSMenuItem()
     private let permissionItem = NSMenuItem()
+    private let conflictItem = NSMenuItem()
+
+    /// Non-nil while the panel hot key registration is failing (Task 4).
+    private var hotKeyConflict: String?
 
     /// The custom art icon (Resources/icon.png in the bundle). Colored artwork,
     /// so NOT a template image — macOS would flatten it to a black silhouette.
@@ -50,6 +54,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private func buildMenu() {
         guard let menu = statusItem.menu else { return }
+
+        conflictItem.title = "Hotkey in use by another app"
+        conflictItem.isEnabled = false
+        conflictItem.isHidden = true
+        menu.addItem(conflictItem)
 
         let openItem = NSMenuItem(
             title: "Open P's Paste",
@@ -98,8 +107,28 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         pauseItem.title = monitor.isPaused ? "Resume Capture" : "Pause Capture"
         permissionItem.isHidden = PasteService.isAccessibilityTrusted()
+        conflictItem.isHidden = hotKeyConflict == nil
+        refreshStatusIcon()
+    }
 
+    /// Called by the assembly when hot key registration fails (nil = recovered).
+    func setHotKeyConflict(_ error: String?) {
+        hotKeyConflict = error
+        refreshStatusIcon()
+    }
+
+    private func refreshStatusIcon() {
         guard let button = statusItem.button else { return }
+
+        if hotKeyConflict != nil {
+            button.image = NSImage(
+                systemSymbolName: "exclamationmark.triangle.fill",
+                accessibilityDescription: "P's Paste hotkey conflict"
+            )
+            button.appearsDisabled = false
+            return
+        }
+
         if monitor.isPaused {
             button.image = NSImage(
                 systemSymbolName: "pause.circle",

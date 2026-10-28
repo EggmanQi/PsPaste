@@ -24,6 +24,7 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeyService = HotKeyService()
     private let menuBarController: MenuBarController
     private let debugWindowController: DebugWindowController
+    private let notifier = SystemNotifier()
 
     override init() {
         panelController = PanelController(
@@ -51,6 +52,19 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
         }
         panelModel.onRestore = { [weak self] item in self?.handleRestore(item) }
         hotKeyService.onToggle = { [panelController] in panelController.toggle() }
+        hotKeyService.onRegistrationStateChange = { [weak self] state in
+            guard let self else { return }
+            switch state {
+            case .registered:
+                self.menuBarController.setHotKeyConflict(nil)
+            case .failed(let error):
+                self.menuBarController.setHotKeyConflict(error)
+                self.notifier.deliver(
+                    title: "P's Paste",
+                    body: "Shortcut ⌘⇧` is in use by another app, so the panel hotkey is unavailable. Retrying every 30 seconds."
+                )
+            }
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
