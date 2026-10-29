@@ -65,4 +65,16 @@ final class PanelModelTests: XCTestCase {
             PanelModel.searchAppendText(forCharacters: "\t", hasCommandModifiers: false)
         )
     }
+
+    // MARK: - Task 7: search summons collapsed, every show resets it
+
+    @MainActor
+    func testSearchStartsCollapsedAndPrepareForShowResetsIt() {
+        let model = PanelModel()
+        XCTAssertFalse(model.searchExpanded)
+
+        model.searchExpanded = true
+        model.prepareForShow()
+        XCTAssertFalse(model.searchExpanded)
+    }
 }

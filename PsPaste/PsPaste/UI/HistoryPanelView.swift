@@ -28,13 +28,8 @@ struct HistoryPanelView: View {
             historyArea
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            // §5.1: translucent material with a warm tint layered on top.
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Theme.ColorToken.panelTint(colorScheme)
-            }
-        }
+        // §5.1: opaque Kami parchment canvas (solid warm paper, Task 7).
+        .background(Theme.ColorToken.panelBackground(colorScheme))
         .clipShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: Theme.Panel.cornerRadius,
@@ -47,11 +42,11 @@ struct HistoryPanelView: View {
             if model.showsManualPasteHint {
                 Text("Copied — press ⌘V to paste")
                     .font(.subheadline)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, Theme.Hint.horizontalPadding)
+                    .padding(.vertical, Theme.Hint.verticalPadding)
                     .background(.regularMaterial, in: Capsule())
                     .shadow(radius: 4)
-                    .padding(.top, 8)
+                    .padding(.top, Theme.Hint.topPadding)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -59,33 +54,50 @@ struct HistoryPanelView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            // Icon-state search field: unfocused it reads as magnifier + hint
-            // (UI.md §2.3); clicking it (or typing a character) enters input mode.
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+        HStack(spacing: Theme.Panel.topBarItemSpacing) {
+            // Search slot (UI.md §2.3, Task 7): summons as a collapsed button;
+            // clicking it, typing a character, or pressing ⌘F expands the field.
+            searchSlot
+            Spacer()
+            Button("Pinboard") {}
+                .disabled(true)
+                .opacity(Theme.Control.disabledOpacity)
+            Button(action: {}) {
+                Image(systemName: "gearshape")
+            }
+            .disabled(true)
+            .opacity(Theme.Control.disabledOpacity)
+        }
+        .font(Theme.TextStyle.topBar)
+        .frame(height: Theme.Panel.topBarHeight)
+        .padding(.horizontal, Theme.Panel.topBarHorizontalPadding)
+    }
+
+    /// One fixed-height slot for both search states: collapsed icon button or
+    /// expanded input field, same capsule fill, so the swap does not reflow
+    /// the bar.
+    private var searchSlot: some View {
+        HStack(spacing: Theme.SearchSlot.iconSpacing) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
+            if model.searchExpanded {
                 TextField("Search clipboard history", text: $model.searchText)
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
                     .onSubmit { model.confirmSelection(in: items) }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Theme.ColorToken.searchBarBackground, in: Capsule())
-            Spacer()
-            Button("Pinboard") {}
-                .disabled(true)
-                .opacity(0.4)
-            Button(action: {}) {
-                Image(systemName: "gearshape")
-            }
-            .disabled(true)
-            .opacity(0.4)
         }
-        .font(Theme.TextStyle.topBar)
-        .frame(height: Theme.Panel.topBarHeight)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Theme.SearchSlot.horizontalPadding)
+        .padding(.vertical, Theme.SearchSlot.verticalPadding)
+        .background(Theme.ColorToken.searchBarBackground(colorScheme), in: Capsule())
+        .contentShape(Capsule())
+        .onTapGesture {
+            guard !model.searchExpanded else { return }
+            model.searchExpanded = true
+        }
+        .onChange(of: model.searchExpanded, initial: true) { _, expanded in
+            searchFocused = expanded
+        }
     }
 
     private var historyArea: some View {
@@ -128,12 +140,12 @@ struct HistoryPanelView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Theme.EmptyState.spacing) {
             Text("Copy something to get started")
                 .font(.headline)
             Text("Press ⌘⇧` anywhere to open this panel")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
         }
     }
 
@@ -153,13 +165,18 @@ struct HistoryPanelView: View {
             model.confirmSelection(in: items)
             return .handled
         default:
-            // Type-to-search (UI.md §2.3): printable characters focus the field
-            // and append themselves; functional keys and ⌘ shortcuts pass through.
+            if press.key == "f", press.modifiers.contains(.command) {
+                model.searchExpanded = true
+                return .handled
+            }
+            // Type-to-search (UI.md §2.3): printable characters expand the slot
+            // and append to the search text; functional keys and ⌘ shortcuts
+            // pass through.
             if let text = PanelModel.searchAppendText(
                 forCharacters: press.characters,
                 hasCommandModifiers: press.modifiers.contains(.command)
             ) {
-                searchFocused = true
+                model.searchExpanded = true
                 model.searchText.append(text)
                 return .handled
             }

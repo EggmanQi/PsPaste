@@ -13,6 +13,10 @@ final class PanelModel {
     }
 
     var searchText = ""
+    /// True once the user has entered search input mode (Task 7). The panel
+    /// always summons with the collapsed search button; typing a character or
+    /// clicking the button (or pressing ⌘F) expands the field.
+    var searchExpanded = false
     /// Nil means "follow the newest item"; resolved by the view against current items.
     var selectedID: UUID?
     /// What caused the last selection change; drives scroll-to-visible decisions (Task 6-A).
@@ -30,6 +34,8 @@ final class PanelModel {
         selectedID = nil
         selectionChangeSource = .programmatic
         showsManualPasteHint = false
+        // Every summon starts from the collapsed search button (Task 7).
+        searchExpanded = false
     }
 
     /// Mouse click on a card: instant selection, no scroll-to-visible (Task 6-A).

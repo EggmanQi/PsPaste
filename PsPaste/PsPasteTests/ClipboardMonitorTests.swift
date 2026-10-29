@@ -94,4 +94,59 @@ final class ClipboardMonitorTests: XCTestCase {
         copyText("real copy")
         XCTAssertEqual(captured.map(\.text), ["real copy"])
     }
+
+    // MARK: - Task 8-D: corrupt image payloads never reach storage
+
+    /// Real-world case: an incomplete pasteboard read produced a 4-byte
+    /// PNG-magic-only file on disk. The entry must degrade to a text entry.
+    func testCorruptImagePayloadDegradesToTextEntry() {
+        let item = MockPasteboardItem()
+        item.setString("xcode console output", forType: .string)
+        item.setData(
+            Data([0x89, 0x50, 0x47, 0x0D]), // PNG magic only, 4 bytes
+            forType: NSPasteboard.PasteboardType("public.png")
+        )
+        pasteboard.simulateCopy(
+            declaredTypes: [.string, NSPasteboard.PasteboardType("public.png")],
+            items: [item]
+        )
+        monitor.checkNow()
+
+        XCTAssertEqual(captured.count, 1)
+        XCTAssertEqual(captured.first?.contentTypes, ["public.utf8-plain-text"])
+        XCTAssertTrue(captured.first?.payloads.isEmpty ?? false)
+        XCTAssertEqual(captured.first?.text, "xcode console output")
+    }
+
+    func testValidImagePayloadIsCaptured() {
+        let image = NSImage(size: NSSize(width: 8, height: 8))
+        image.lockFocus()
+        NSColor.red.setFill()
+        NSRect(x: 0, y: 0, width: 8, height: 8).fill()
+        image.unlockFocus()
+        let png = NSBitmapImageRep(data: image.tiffRepresentation!)!
+            .representation(using: .png, properties: [:])!
+        XCTAssertGreaterThan(png.count, 100)
+
+        let item = MockPasteboardItem()
+        item.setData(png, forType: NSPasteboard.PasteboardType("public.png"))
+        pasteboard.simulateCopy(declaredTypes: [NSPasteboard.PasteboardType("public.png")], items: [item])
+        monitor.checkNow()
+
+        XCTAssertEqual(captured.count, 1)
+        XCTAssertEqual(captured.first?.contentTypes, ["public.png"])
+        XCTAssertEqual(captured.first?.payloads.count, 1)
+    }
+
+    func testCorruptImageWithoutAnyTextIsNotCaptured() {
+        let item = MockPasteboardItem()
+        item.setData(
+            Data([0x89, 0x50, 0x47, 0x0D]),
+            forType: NSPasteboard.PasteboardType("public.png")
+        )
+        pasteboard.simulateCopy(declaredTypes: [NSPasteboard.PasteboardType("public.png")], items: [item])
+        monitor.checkNow()
+
+        XCTAssertTrue(captured.isEmpty)
+    }
 }

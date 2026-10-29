@@ -17,6 +17,8 @@
 - [x] 任务四：热键注册失败的可见提示与冲突处理（2026-10-27 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务五：面板点击外部自动收起（2026-10-27 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务六：面板选中响应速度与选中态视觉优化（2026-10-27 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务七：搜索默认按钮态 + Kami 默认主题落地（2026-10-29 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务八：HIG 化选中态与层次 + 缩略图损坏回退（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
 - [ ] 搜索过滤、Pinboard（单收藏夹）
@@ -94,3 +96,30 @@
   选中 = 2pt 描边 + 8% 填充 + 1.02 缩放，色值全在 Theme 语义化命名，grep 自查视图
   无内联常量。xcodebuild test 32/32 通过、Debug 0 error 0 警告；浅色/深色截图待
   B 类人工验证。
+- 2026-10-29：任务七完成。① 搜索默认按钮态：`PanelModel.searchExpanded`，
+  `prepareForShow()` 每次唤起重置为 false；顶栏搜索位在折叠态只渲染放大镜
+  按钮（无 TextField，根除了唤出即输入态的问题），点击/键入可打印字符/⌘F
+  展开输入框并聚焦（`.onChange(of: searchExpanded)` 同步 FocusState）；
+  两种状态同一胶囊槽位、同高不 reflow。② Kami 默认主题落地：面板底从
+  “毛玻璃 + 暖色 tint（75%）”改为实色羊皮纸（浅 #F5F4ED / 深 #26221E），
+  半透明透出桌面会冲淡暖纸调、层次塌掉；弱化文字/图标从系统 `.secondary`
+  （冷灰）改为黄棕底调暖灰（浅 #6E6759 / 深 #A8A091）；卡片/选中描边色值
+  本就是 Kami 值，未动。xcodebuild test 33/33 通过、Debug 0 error 0 警告；
+  浅色/深色观感待 B 类人工验证。
+- 2026-10-29：任务八完成（HIG 审查 skill 全流程，audit 清单落
+  Docs/DECISIONS/hig-audit-task8.md）。A：选中态改系统 accent（
+  `Theme.Selection` = `Color.accentColor` 2pt 描边 + 15% 填充，删墨蓝/钢蓝
+  自定义色；HIG focus-and-selection：集合用高亮非细环，color.md：高亮属
+  controlAccentColor 管辖），当帧切换 + 仅缩放 0.1s 的性能约束保留。B：层次
+  拉开——浅 面板 #F0EEE6/卡 #FFFFFF，深 面板 #1F1C19/卡 #332E29，深描边
+  重配 #453E35（描边恒比卡面亮一档）。C：卡片 padding 10→12、间距 12→14，
+  卡高公式 -24→-28（上下各留 14，同网格）；顺带把顶栏/搜索胶囊/hint/空态/
+  meta 行的残留间距与透明度魔数全部收进 Theme（grep 自查视图层仅剩
+  HistoryListView——任务一调试窗口脚手架，不在范围内）。D：捕获侧
+  `ClipboardMonitor.isValidPayload`（图片 ≥100B 且 NSImage 可解码才落盘，
+  不通过则从 contentTypes/payloads 剔除，有文本自动降级为文本条目）；
+  展示侧 CardView 区分加载中/加载失败（imageLoadFailed），失败且 item.text
+  非空回退文本卡布局（纯函数 shouldFallbackToText 可测）。新增 7 个单测
+  （捕获 3 + 回退 4），xcodebuild test 40/40 通过、Debug 0 error 0 警告。
+  B 类待人工：深浅色选中态可辨性、间距观感、新复制不再产生损坏 payload、
+  旧损坏条目显示文本回退。

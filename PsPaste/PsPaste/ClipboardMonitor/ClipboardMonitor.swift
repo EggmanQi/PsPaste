@@ -158,13 +158,16 @@ final class ClipboardMonitor {
 
         for item in pasteboard.items {
             for type in Self.capturedTypes where item.types.contains(type) {
-                contentTypes.insert(type.rawValue)
-                hasher.update(data: Data(type.rawValue.utf8))
                 if Self.payloadTypes.contains(type.rawValue) {
-                    guard let data = item.data(forType: type) else { continue }
+                    guard let data = item.data(forType: type),
+                          Self.isValidPayload(type.rawValue, data: data) else { continue }
+                    contentTypes.insert(type.rawValue)
+                    hasher.update(data: Data(type.rawValue.utf8))
                     hasher.update(data: data)
                     payloads.append((type.rawValue, data))
                 } else if let string = item.string(forType: type) {
+                    contentTypes.insert(type.rawValue)
+                    hasher.update(data: Data(type.rawValue.utf8))
                     hasher.update(data: Data(string.utf8))
                     if type == .string {
                         plainParts.append(string)
@@ -186,5 +189,14 @@ final class ClipboardMonitor {
             contentHash: hasher.finalize().map { String(format: "%02x", $0) }.joined(),
             sourceAppBundleID: sourceApp
         )
+    }
+
+    /// Payload admission rule (Task 8-D): corrupt image data (e.g. a 4-byte
+    /// PNG magic-only write from an incomplete pasteboard read) must never
+    /// reach disk. Non-image payloads pass; images must be substantial enough
+    /// and decodable.
+    nonisolated static func isValidPayload(_ type: String, data: Data) -> Bool {
+        guard type == "public.png" || type == "public.tiff" else { return true }
+        return data.count >= 100 && NSImage(data: data) != nil
     }
 }
