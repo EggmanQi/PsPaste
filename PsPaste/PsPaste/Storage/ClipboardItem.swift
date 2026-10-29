@@ -47,3 +47,30 @@ final class ClipboardItem {
         self.contentHash = contentHash
     }
 }
+
+extension ClipboardItem {
+    /// Display text per UI.md §2.2: the full text within the character budget;
+    /// beyond it, keep the first 70% and the last 30% with an ellipsis between,
+    /// so long copies stay readable at both ends.
+    var summary: String {
+        if let text, !text.isEmpty {
+            return Self.middleTruncated(text)
+        }
+        if contentTypes.contains("public.png") || contentTypes.contains("public.tiff") {
+            return "Image"
+        }
+        if contentTypes.contains("public.file-url") {
+            return "File"
+        }
+        return contentTypes.first ?? "Item"
+    }
+
+    /// Middle-truncation rule (UI.md §2.2), a pure function for testing.
+    /// `budget` counts characters, not bytes or lines.
+    static func middleTruncated(_ text: String, budget: Int = 300) -> String {
+        guard text.count > budget else { return text }
+        let headCount = Int((Double(budget) * 0.7).rounded(.down))
+        let tailCount = budget - headCount
+        return "\(text.prefix(headCount)) … \(text.suffix(tailCount))"
+    }
+}

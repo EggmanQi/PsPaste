@@ -13,6 +13,8 @@ enum Theme {
         static let animation = Animation.easeOut(duration: animationDuration)
         static let topBarHorizontalPadding: CGFloat = 16
         static let topBarItemSpacing: CGFloat = 12
+        /// Sections (top bar / divider / history area) stack flush.
+        static let sectionSpacing: CGFloat = 0
     }
 
     /// Shared control states (currently only used by the disabled placeholder
@@ -32,7 +34,7 @@ enum Theme {
         static let metaIconSize: CGFloat = 14
         static let borderWidth: CGFloat = 1
         static let doubleTapInterval: TimeInterval = 0.3
-        static let contentLineLimit = 6
+        static let contentLineLimit = 8
         /// Breathing room between the card row and the divider / panel bottom
         /// edge (§5.1 v2 spacing grid). The history area centers the card row,
         /// so `height` plus twice this margin must equal the area below the
@@ -53,19 +55,23 @@ enum Theme {
         static let horizontalPadding: CGFloat = 12
         static let verticalPadding: CGFloat = 6
         static let topPadding: CGFloat = 8
+        static let shadowRadius: CGFloat = 4
     }
 
     enum EmptyState {
         static let spacing: CGFloat = 6
     }
 
-    /// Selected-card styling (UI.md §5.1 v3): no accent fill or stroke — the
-    /// card surface switches to a standard material and only the scale may
-    /// animate (Task 6's interaction constraint stands).
+    /// Selected-card styling (UI.md §5.1 v4): the selected card turns solid
+    /// white, gains a 2pt system-accent stroke and a restrained shadow — no
+    /// fill tint, no scale. Everything switches on the active frame (Task 6's
+    /// interaction constraint stands).
     enum Selection {
-        static let scale: CGFloat = 1.02
-        /// Selection styling switches on the same frame; only scale may animate, fast.
-        static let animation = Animation.easeOut(duration: 0.1)
+        static let stroke = Color.accentColor
+        static let strokeWidth: CGFloat = 2
+        static let shadowRadius: CGFloat = 8
+        static let shadowY: CGFloat = 3
+        static let shadowOpacity = 0.15
     }
 
     enum TextStyle {
@@ -74,9 +80,9 @@ enum Theme {
         static let topBar = Font.system(.body)
     }
 
-    /// Layered palette (UI.md §5.1 v3): translucent cards float on an opaque
-    /// panel canvas; selection turns one card to a standard material instead
-    /// of tinting it with the accent color.
+    /// Layered palette (UI.md §5.1 v4): translucent cards float on an opaque
+    /// panel canvas; selection turns one card solid white with an accent
+    /// stroke and a shadow instead of tinting it.
     enum ColorToken {
         /// Panel canvas, a half step darker than the v1 paper so white cards
         /// no longer blend into it.
@@ -87,6 +93,11 @@ enum Theme {
         /// values — the card lifts off the parchment without a solid fill).
         static let cardBackgroundLight = Color.white.opacity(0.5)
         static let cardBackgroundDark = Color.white.opacity(0.1)
+
+        /// Selected card: solid white, one full notch above the translucent
+        /// unselected cards (dark: a warmed light step, judgment value).
+        static let cardSelectedLight = Color(hex: 0xFFFFFF)
+        static let cardSelectedDark = Color(hex: 0xE8E4DC)
 
         static let cardBorderLight = Color(hex: 0xE3E0D4)
         /// One notch above the unselected dark card surface, mirroring the
@@ -115,6 +126,10 @@ enum Theme {
 
         static func cardBackground(_ scheme: ColorScheme) -> Color {
             scheme == .dark ? cardBackgroundDark : cardBackgroundLight
+        }
+
+        static func cardSelected(_ scheme: ColorScheme) -> Color {
+            scheme == .dark ? cardSelectedDark : cardSelectedLight
         }
 
         static func cardBorder(_ scheme: ColorScheme) -> Color {

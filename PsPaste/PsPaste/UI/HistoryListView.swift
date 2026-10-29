@@ -33,23 +33,6 @@ struct HistoryListView: View {
     }
 }
 
-extension ClipboardItem {
-    /// First line of text for display; falls back by content kind for media-only copies.
-    var summary: String {
-        if let text, !text.isEmpty {
-            let firstLine = text.prefix(while: { $0 != "\n" })
-            return firstLine.isEmpty ? text : String(firstLine)
-        }
-        if contentTypes.contains("public.png") || contentTypes.contains("public.tiff") {
-            return "Image"
-        }
-        if contentTypes.contains("public.file-url") {
-            return "File"
-        }
-        return contentTypes.first ?? "Item"
-    }
-}
-
 #Preview {
     let container = try! ModelContainer(
         for: ClipboardItem.self,

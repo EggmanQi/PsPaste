@@ -22,7 +22,7 @@ struct HistoryPanelView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Theme.Panel.sectionSpacing) {
             topBar
             Divider()
             historyArea
@@ -50,7 +50,7 @@ struct HistoryPanelView: View {
                     .padding(.horizontal, Theme.Hint.horizontalPadding)
                     .padding(.vertical, Theme.Hint.verticalPadding)
                     .background(.regularMaterial, in: Capsule())
-                    .shadow(radius: 4)
+                    .shadow(radius: Theme.Hint.shadowRadius)
                     .padding(.top, Theme.Hint.topPadding)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }

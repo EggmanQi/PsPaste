@@ -43,6 +43,25 @@ struct CardView: View {
         isImage && imageLoadFailed && hasText
     }
 
+    /// Static timestamp for the meta row (UI.md §2.2): "HH:mm" for copies made
+    /// today, "MM-dd HH:mm" for older ones. A fixed label — the live relative
+    /// format re-rendered cards on a timer for no benefit.
+    nonisolated static func timeLabel(
+        for date: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar
+        // DateFormatter does not pick the calendar's time zone up by itself.
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = calendar.isDate(date, inSameDayAs: now)
+            ? "HH:mm"
+            : "MM-dd HH:mm"
+        return formatter.string(from: date)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Card.metaSpacing) {
             content
@@ -53,9 +72,13 @@ struct CardView: View {
         .frame(width: Theme.Card.width, height: Theme.Card.height)
         .background(cardBackground)
         .overlay(cardBorder)
-        // Only the scale animates, and fast: stroke/fill switch on the same frame.
-        .scaleEffect(isSelected ? Theme.Selection.scale : 1)
-        .animation(Theme.Selection.animation, value: isSelected)
+        // §5.1 v4: only the selected card carries a shadow; it switches on the
+        // same frame as stroke and fill (no scale, no animation).
+        .shadow(
+            color: .black.opacity(isSelected ? Theme.Selection.shadowOpacity : 0),
+            radius: isSelected ? Theme.Selection.shadowRadius : 0,
+            y: isSelected ? Theme.Selection.shadowY : 0
+        )
         .contentShape(RoundedRectangle(cornerRadius: Theme.Card.cornerRadius))
         .onTapGesture(count: 1) { handleTap() }
         .task(id: item.id) {
@@ -70,27 +93,27 @@ struct CardView: View {
         }
     }
 
-    /// Two-layer card surface (§5.1 v3): an unselected card is a translucent
-    /// tint over the panel canvas; a selected card turns to a standard
-    /// material — the HIG-sanctioned depth cue for the content layer
-    /// (materials.md: standard materials, not Liquid Glass, in content).
-    @ViewBuilder
+    /// Two-state card surface (§5.1 v4): translucent tint normally, solid
+    /// white when selected.
     private var cardBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
-        if isSelected {
-            shape.fill(.regularMaterial)
-        } else {
-            shape.fill(Theme.ColorToken.cardBackground(colorScheme))
-        }
+        RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
+            .fill(
+                isSelected
+                    ? Theme.ColorToken.cardSelected(colorScheme)
+                    : Theme.ColorToken.cardBackground(colorScheme)
+            )
     }
 
-    /// 1pt warm border in both states; selection carries no stroke of its own
-    /// (§5.1 v3 — material + scale instead).
+    /// 1pt warm border normally; 2pt accent stroke when selected (§5.1 v4).
     private var cardBorder: some View {
         RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
             .strokeBorder(
-                Theme.ColorToken.cardBorder(colorScheme),
-                lineWidth: Theme.Card.borderWidth
+                isSelected
+                    ? Theme.Selection.stroke
+                    : Theme.ColorToken.cardBorder(colorScheme),
+                lineWidth: isSelected
+                    ? Theme.Selection.strokeWidth
+                    : Theme.Card.borderWidth
             )
     }
 
@@ -149,7 +172,7 @@ struct CardView: View {
             }
             Text(SourceAppDisplay.name(for: item.sourceAppBundleID))
             Spacer(minLength: 0)
-            Text(item.createdAt, style: .relative)
+            Text(Self.timeLabel(for: item.createdAt))
         }
         .font(Theme.TextStyle.cardMeta)
         .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
