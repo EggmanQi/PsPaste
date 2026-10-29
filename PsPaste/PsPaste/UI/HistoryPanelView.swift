@@ -102,6 +102,9 @@ struct HistoryPanelView: View {
 
     private var historyArea: some View {
         ScrollViewReader { proxy in
+            // No fixed height here: the area fills the space below the top bar
+            // and the card row centers inside it, leaving verticalMargin above
+            // and below (§5.1 v2 spacing grid) instead of hugging the divider.
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: Theme.Card.spacing) {
                     ForEach(items, id: \.id) { item in
@@ -116,8 +119,9 @@ struct HistoryPanelView: View {
                     }
                 }
                 .padding(.horizontal, Theme.Card.spacing)
+                .frame(height: Theme.Card.height)
+                .frame(maxHeight: .infinity)
             }
-            .frame(height: Theme.Card.height)
             .overlay {
                 if items.isEmpty {
                     emptyState

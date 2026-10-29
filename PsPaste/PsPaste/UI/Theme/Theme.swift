@@ -33,9 +33,12 @@ enum Theme {
         static let borderWidth: CGFloat = 1
         static let doubleTapInterval: TimeInterval = 0.3
         static let contentLineLimit = 6
-        /// 28 keeps 14pt of vertical slack (half the new grid spacing) above and
-        /// below the card inside the history area.
-        static let height = Panel.height - Panel.topBarHeight - 28
+        /// Breathing room between the card row and the divider / panel bottom
+        /// edge (§5.1 v2 spacing grid). The history area centers the card row,
+        /// so `height` plus twice this margin must equal the area below the
+        /// top bar.
+        static let verticalMargin: CGFloat = 14
+        static let height = Panel.height - Panel.topBarHeight - 2 * verticalMargin
     }
 
     /// The collapsed search button / expanded search field capsule (top bar).

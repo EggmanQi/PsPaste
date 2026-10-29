@@ -123,3 +123,8 @@
   （捕获 3 + 回退 4），xcodebuild test 40/40 通过、Debug 0 error 0 警告。
   B 类待人工：深浅色选中态可辨性、间距观感、新复制不再产生损坏 payload、
   旧损坏条目显示文本回退。
+- 2026-10-29：任务八 C 类修正——卡高公式 -28 此前未生效：ScrollView 被钉死为
+  Card.height，卡片行贴上部分隔线、省下的 27pt 变成面板底部死空白。现 ScrollView
+  填满顶栏以下空间、卡片行（252pt）垂直居中，上下各留 14pt（新增
+  Theme.Card.verticalMargin，UI.md §5.1 已补"不得贴边"条款），新增 ThemeTests
+  守护布局不变量。xcodebuild test 42/42 通过、编译 0 警告。
