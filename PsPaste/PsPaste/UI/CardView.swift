@@ -70,28 +70,27 @@ struct CardView: View {
         }
     }
 
-    /// Three-layer hierarchy (§5.1 v2): card fill, then a 15% accent fill when selected.
+    /// Two-layer card surface (§5.1 v3): an unselected card is a translucent
+    /// tint over the panel canvas; a selected card turns to a standard
+    /// material — the HIG-sanctioned depth cue for the content layer
+    /// (materials.md: standard materials, not Liquid Glass, in content).
+    @ViewBuilder
     private var cardBackground: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
-                .fill(Theme.ColorToken.cardBackground(colorScheme))
-            if isSelected {
-                RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
-                    .fill(Theme.Selection.fill)
-            }
+        let shape = RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
+        if isSelected {
+            shape.fill(.regularMaterial)
+        } else {
+            shape.fill(Theme.ColorToken.cardBackground(colorScheme))
         }
     }
 
-    /// 1pt warm border normally; 2pt accent stroke when selected.
+    /// 1pt warm border in both states; selection carries no stroke of its own
+    /// (§5.1 v3 — material + scale instead).
     private var cardBorder: some View {
         RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
             .strokeBorder(
-                isSelected
-                    ? Theme.Selection.stroke
-                    : Theme.ColorToken.cardBorder(colorScheme),
-                lineWidth: isSelected
-                    ? Theme.Selection.strokeWidth
-                    : Theme.Card.borderWidth
+                Theme.ColorToken.cardBorder(colorScheme),
+                lineWidth: Theme.Card.borderWidth
             )
     }
 

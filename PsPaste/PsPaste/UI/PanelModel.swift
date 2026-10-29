@@ -17,7 +17,8 @@ final class PanelModel {
     /// always summons with the collapsed search button; typing a character or
     /// clicking the button (or pressing ⌘F) expands the field.
     var searchExpanded = false
-    /// Nil means "follow the newest item"; resolved by the view against current items.
+    /// Nil means "no selection": the panel summons unselected and Return
+    /// pastes nothing until the user picks a card (arrows or click).
     var selectedID: UUID?
     /// What caused the last selection change; drives scroll-to-visible decisions (Task 6-A).
     private(set) var selectionChangeSource: SelectionChangeSource = .programmatic
@@ -72,12 +73,21 @@ final class PanelModel {
         }
     }
 
+    /// The current selection, or nil when nothing is selected. No fallback:
+    /// a nil ID stays nil even when items exist (UI.md §2.3 — the panel
+    /// summons unselected).
     func effectiveSelection(in items: [ClipboardItem]) -> ClipboardItem? {
-        guard !items.isEmpty else { return nil }
-        if let selectedID, let item = items.first(where: { $0.id == selectedID }) {
-            return item
-        }
-        return items.first
+        guard let selectedID else { return nil }
+        return items.first(where: { $0.id == selectedID })
+    }
+
+    /// Search filter reconciliation (UI.md §2.3): keep the selection while it
+    /// is still in the filtered results; when it fell out, land on the first
+    /// match so typing never leaves Return without a target.
+    func updateSelectionAfterFilter(in items: [ClipboardItem]) {
+        if effectiveSelection(in: items) != nil { return }
+        selectionChangeSource = .programmatic
+        selectedID = items.first?.id
     }
 
     // MARK: - Pure decision logic (Task 6)

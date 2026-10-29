@@ -59,19 +59,13 @@ enum Theme {
         static let spacing: CGFloat = 6
     }
 
-    /// Selected-card styling (UI.md §5.1 v2): system-accent stroke + 15% fill
-    /// + slight scale. macOS collections highlight with the accent color, not a
-    /// custom ring (HIG focus-and-selection; color.md: controlAccentColor).
+    /// Selected-card styling (UI.md §5.1 v3): no accent fill or stroke — the
+    /// card surface switches to a standard material and only the scale may
+    /// animate (Task 6's interaction constraint stands).
     enum Selection {
-        static let fillOpacity = 0.15
         static let scale: CGFloat = 1.02
-        static let strokeWidth: CGFloat = 2
         /// Selection styling switches on the same frame; only scale may animate, fast.
         static let animation = Animation.easeOut(duration: 0.1)
-
-        static let stroke = Color.accentColor
-
-        static var fill: Color { stroke.opacity(fillOpacity) }
     }
 
     enum TextStyle {
@@ -80,21 +74,23 @@ enum Theme {
         static let topBar = Font.system(.body)
     }
 
-    /// Layered palette (UI.md §5.1 v2): an opaque panel canvas one full step
-    /// below the cards, then the selected card in the system accent. Adjacent
-    /// layers must be distinguishable at a glance (HIG layout: visual hierarchy).
+    /// Layered palette (UI.md §5.1 v3): translucent cards float on an opaque
+    /// panel canvas; selection turns one card to a standard material instead
+    /// of tinting it with the accent color.
     enum ColorToken {
         /// Panel canvas, a half step darker than the v1 paper so white cards
         /// no longer blend into it.
         static let panelBackgroundLight = Color(hex: 0xF0EEE6)
         static let panelBackgroundDark = Color(hex: 0x1F1C19)
 
-        static let cardBackgroundLight = Color(hex: 0xFFFFFF)
-        static let cardBackgroundDark = Color(hex: 0x332E29)
+        /// Unselected card: a translucent tint over the panel canvas (judgment
+        /// values — the card lifts off the parchment without a solid fill).
+        static let cardBackgroundLight = Color.white.opacity(0.5)
+        static let cardBackgroundDark = Color.white.opacity(0.1)
 
         static let cardBorderLight = Color(hex: 0xE3E0D4)
-        /// One notch above the new darker card (#332E29), mirroring the light
-        /// mode border/card relationship.
+        /// One notch above the unselected dark card surface, mirroring the
+        /// light-mode border/card relationship.
         static let cardBorderDark = Color(hex: 0x453E35)
 
         /// Muted text/icons: warm gray with a yellow-brown undertone (Kami),

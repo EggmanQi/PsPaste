@@ -38,6 +38,11 @@ struct HistoryPanelView: View {
         )
         .contentShape(Rectangle())
         .onKeyPress { press in pressHandler(press) }
+        .onChange(of: model.searchText, initial: false) { _, _ in
+            // Filter results keep a valid selection, else land on the first
+            // match, so typing never leaves Return without a target (§2.3).
+            model.updateSelectionAfterFilter(in: items)
+        }
         .overlay(alignment: .top) {
             if model.showsManualPasteHint {
                 Text("Copied — press ⌘V to paste")

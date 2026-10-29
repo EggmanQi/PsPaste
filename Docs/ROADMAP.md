@@ -19,6 +19,7 @@
 - [x] 任务六：面板选中响应速度与选中态视觉优化（2026-10-27 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务七：搜索默认按钮态 + Kami 默认主题落地（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务八：HIG 化选中态与层次 + 缩略图损坏回退（2026-10-29 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务九：选中效果 v3——默认无选中 + 选中材质化（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
 - [ ] 搜索过滤、Pinboard（单收藏夹）
@@ -128,3 +129,13 @@
   填满顶栏以下空间、卡片行（252pt）垂直居中，上下各留 14pt（新增
   Theme.Card.verticalMargin，UI.md §5.1 已补"不得贴边"条款），新增 ThemeTests
   守护布局不变量。xcodebuild test 42/42 通过、编译 0 警告。
+- 2026-10-29：任务九完成（选中效果 v3）。① 打开面板默认无选中：selectedID 的
+  nil 语义从"跟随最新"改为"无选中"，effectiveSelection 不再有 first 回退，
+  Return 在选中前不粘贴；搜索过滤时选中保留则不动、失效则落到第一条结果
+  （updateSelectionAfterFilter，视图在 searchText 变化时调用），无选中时方向键
+  落到最新一条。② 选中视觉：删除 accent 15% 填充 + 2pt 描边（Theme.Selection
+  只留 scale 1.02 + 0.1s 动画）；未选中卡改半透明 tint（浅 白50% / 深 白10%），
+  选中卡改标准材质 .regularMaterial（HIG materials.md：内容层层次用标准材质，
+  Liquid Glass 只属功能层且需 macOS 26+）。UI.md §5.1 升 v3。新增 5 个单测，
+  xcodebuild test 47/47 通过、编译 0 警告。B 类待人工：无选中唤出、材质选中
+  态在深浅色下的可辨性。
