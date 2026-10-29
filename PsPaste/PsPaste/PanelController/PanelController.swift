@@ -41,7 +41,7 @@ final class PanelController {
     init(contentView: NSView, model: PanelModel) {
         self.model = model
         panel = PastePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: Theme.Panel.height),
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: Metrics.Panel.height),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -67,11 +67,11 @@ final class PanelController {
             x: screen.frame.minX,
             y: screen.frame.minY,
             width: screen.frame.width,
-            height: Theme.Panel.height
+            height: Metrics.Panel.height
         )
 
         var entryFrame = frame
-        entryFrame.origin.y -= Theme.Panel.slideOffset
+        entryFrame.origin.y -= Metrics.Panel.slideOffset
         panel.setFrame(entryFrame, display: false)
         panel.alphaValue = 0
 
@@ -81,7 +81,7 @@ final class PanelController {
         model.prepareForShow()
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = Theme.Panel.animationDuration
+            context.duration = Metrics.Panel.animationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().setFrame(frame, display: true)
             panel.animator().alphaValue = 1
@@ -104,10 +104,10 @@ final class PanelController {
     func close() {
         removeOutsideInteractionMonitors()
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = Theme.Panel.animationDuration
+            context.duration = Metrics.Panel.animationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             var exitFrame = panel.frame
-            exitFrame.origin.y -= Theme.Panel.slideOffset
+            exitFrame.origin.y -= Metrics.Panel.slideOffset
             panel.animator().setFrame(exitFrame, display: false)
             panel.animator().alphaValue = 0
         }) {

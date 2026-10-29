@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// One history card in the panel (UI.md §2.2, selection styling per §5.1).
+/// One history card in the panel (UI.md §2.2). All styling comes from the
+/// active `Theme`; layout metrics are shared `Metrics`.
 struct CardView: View {
     let item: ClipboardItem
     let isSelected: Bool
@@ -9,6 +10,7 @@ struct CardView: View {
     let onConfirm: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(ThemeManager.self) private var themeManager
     @State private var thumbnail: NSImage?
     /// Distinguishes "still loading" from "payload undecodable": a corrupt image
     /// must fall back to the captured text instead of a gray placeholder (Task 8-D).
@@ -18,6 +20,19 @@ struct CardView: View {
     /// tap back for the double-tap window (~0.3s) — that wait was part of the
     /// perceived selection lag (Task 6-A).
     @State private var lastTapAt: Date?
+
+    private var theme: any Theme { themeManager.current }
+
+    private var selectionStyle: SelectionStyle { theme.selection(colorScheme) }
+
+    /// Text/icon color for secondary content; the theme may override it on
+    /// the selected card (Particle turns meta text white on the accent fill).
+    private var secondaryForeground: Color {
+        if isSelected, let override = selectionStyle.contentForeground {
+            return override
+        }
+        return theme.secondaryText(colorScheme)
+    }
 
     private var isImage: Bool {
         item.contentTypes.contains("public.png") || item.contentTypes.contains("public.tiff")
@@ -63,23 +78,23 @@ struct CardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Card.metaSpacing) {
+        VStack(alignment: .leading, spacing: Metrics.Card.metaSpacing) {
             content
             Spacer(minLength: 0)
             metaRow
         }
-        .padding(Theme.Card.padding)
-        .frame(width: Theme.Card.width, height: Theme.Card.height)
+        .padding(Metrics.Card.padding)
+        .frame(width: Metrics.Card.width, height: Metrics.Card.height)
         .background(cardBackground)
         .overlay(cardBorder)
-        // §5.1 v4: only the selected card carries a shadow; it switches on the
-        // same frame as stroke and fill (no scale, no animation).
+        // Only the selected card carries a shadow; stroke, fill, and shadow
+        // switch on the same frame (no scale, no animation — §5.1 v4).
         .shadow(
-            color: .black.opacity(isSelected ? Theme.Selection.shadowOpacity : 0),
-            radius: isSelected ? Theme.Selection.shadowRadius : 0,
-            y: isSelected ? Theme.Selection.shadowY : 0
+            color: .black.opacity(isSelected ? selectionStyle.shadowOpacity : 0),
+            radius: isSelected ? selectionStyle.shadowRadius : 0,
+            y: isSelected ? selectionStyle.shadowY : 0
         )
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Card.cornerRadius))
+        .contentShape(RoundedRectangle(cornerRadius: theme.cardCornerRadius))
         .onTapGesture(count: 1) { handleTap() }
         .task(id: item.id) {
             guard isImage, thumbnail == nil, !imageLoadFailed else { return }
@@ -93,33 +108,30 @@ struct CardView: View {
         }
     }
 
-    /// Two-state card surface (§5.1 v4): translucent tint normally, solid
-    /// white when selected.
+    /// Two-state card surface: the theme's unselected tint, or its selected
+    /// fill (solid white for Parchment, accent for Particle).
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
-            .fill(
-                isSelected
-                    ? Theme.ColorToken.cardSelected(colorScheme)
-                    : Theme.ColorToken.cardBackground(colorScheme)
-            )
+        RoundedRectangle(cornerRadius: theme.cardCornerRadius)
+            .fill(isSelected ? selectionStyle.cardFill : theme.cardBackground(colorScheme))
     }
 
-    /// 1pt warm border normally; 2pt accent stroke when selected (§5.1 v4).
+    /// The theme's 1pt border normally; its selected stroke (accent 2pt for
+    /// Parchment, none for Particle).
     private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: Theme.Card.cornerRadius)
+        RoundedRectangle(cornerRadius: theme.cardCornerRadius)
             .strokeBorder(
                 isSelected
-                    ? Theme.Selection.stroke
-                    : Theme.ColorToken.cardBorder(colorScheme),
+                    ? selectionStyle.stroke
+                    : theme.cardBorder(colorScheme),
                 lineWidth: isSelected
-                    ? Theme.Selection.strokeWidth
-                    : Theme.Card.borderWidth
+                    ? selectionStyle.strokeWidth
+                    : Metrics.Card.borderWidth
             )
     }
 
     private func handleTap() {
         let now = Date()
-        if let lastTapAt, now.timeIntervalSince(lastTapAt) < Theme.Card.doubleTapInterval {
+        if let lastTapAt, now.timeIntervalSince(lastTapAt) < Metrics.Card.doubleTapInterval {
             self.lastTapAt = nil
             onConfirm()
         } else {
@@ -139,43 +151,48 @@ struct CardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             // Still loading (or undecodable with no text to fall back to).
-            RoundedRectangle(cornerRadius: Theme.Card.cornerRadius / 2)
-                .fill(Theme.ColorToken.placeholder)
+            RoundedRectangle(cornerRadius: theme.cardCornerRadius / 2)
+                .fill(theme.placeholder(colorScheme))
                 .overlay {
                     Image(systemName: "photo")
-                        .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
+                        .foregroundStyle(secondaryForeground)
                 }
         }
     }
 
     /// Text layout shared by text entries and the corrupt-image fallback.
     private var textContent: some View {
-        VStack(alignment: .leading, spacing: Theme.Card.contentSpacing) {
+        VStack(alignment: .leading, spacing: Metrics.Card.contentSpacing) {
             if let host = item.text.flatMap(URL.init(string:))?.host() {
                 Text(host)
-                    .font(Theme.TextStyle.cardMeta)
-                    .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
+                    .font(theme.cardMetaFont)
+                    .foregroundStyle(secondaryForeground)
             }
             Text(item.summary)
-                .font(Theme.TextStyle.cardContent)
-                .lineLimit(Theme.Card.contentLineLimit)
+                .font(theme.cardContentFont)
+                .foregroundStyle(
+                    isSelected
+                        ? selectionStyle.contentForeground ?? theme.primaryText(colorScheme)
+                        : theme.primaryText(colorScheme)
+                )
+                .lineLimit(Metrics.Card.contentLineLimit)
                 .truncationMode(.tail)
         }
     }
 
     private var metaRow: some View {
-        HStack(spacing: Theme.Card.metaItemSpacing) {
-            if let icon = SourceAppDisplay.icon(for: item.sourceAppBundleID, size: Theme.Card.metaIconSize) {
+        HStack(spacing: Metrics.Card.metaItemSpacing) {
+            if let icon = SourceAppDisplay.icon(for: item.sourceAppBundleID, size: Metrics.Card.metaIconSize) {
                 Image(nsImage: icon)
                     .resizable()
-                    .frame(width: Theme.Card.metaIconSize, height: Theme.Card.metaIconSize)
+                    .frame(width: Metrics.Card.metaIconSize, height: Metrics.Card.metaIconSize)
             }
             Text(SourceAppDisplay.name(for: item.sourceAppBundleID))
             Spacer(minLength: 0)
             Text(Self.timeLabel(for: item.createdAt))
         }
-        .font(Theme.TextStyle.cardMeta)
-        .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
+        .font(theme.cardMetaFont)
+        .foregroundStyle(secondaryForeground)
         .lineLimit(1)
     }
 }

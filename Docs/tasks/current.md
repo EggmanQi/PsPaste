@@ -76,8 +76,14 @@ meta 行活体相对时间改静态标签；长文摘要改中段截断。任务
 ### 验收
 
 - A 类：`xcodebuild -project PsPaste/PsPaste.xcodeproj -scheme PsPaste test`
-  全过（新增 ThemeManager 切换/持久化用例）；Debug 0 error 0 警告；
-  Parchment 主题下与迁移前观感一致；grep 视图层无魔数。
-- B 类（人工，待用户验证）：Particle 主题下选中卡 accent 实底 + 白字
-  一眼可辨（深浅色）；图片卡在选中态下正常；主题切换即时生效且重启
-  保持；两主题下卡片布局/间距不变。
+  **62/62** 全过（新增 7：ThemeManager 切换/持久化/恢复/容错 4 +
+  主题策略与注册表 3）；编译 0 警告；Parchment 全部值原样迁移
+  （色值/字号/圆角/选中参数逐项核对）；视图层 grep 无样式魔数。
+  实现注：`@AppStorage` 仅 View/Scene 上下文生效，ThemeManager 直写
+  同一 `selectedTheme` UserDefaults 键（UI.md §5.2 已注）。
+- B 类（人工，待用户验证）：① 顶栏 paintbrush 菜单列出两主题、当前项
+  checkmark，切换即时生效、重启保持；② Particle 主题下选中卡 accent
+  实底 + 白字一眼可辨（深浅色），图片卡选中态正常；③ 两主题下卡片
+  布局/间距不变，Parchment 观感与迁移前一致；④ 菜单在 floating 面板
+  上的弹出层级正常（NSPanel level=.floating 下 SwiftUI Menu 的理论
+  风险点，需实测）。

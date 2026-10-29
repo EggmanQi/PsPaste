@@ -151,10 +151,11 @@
   |---|---|---|---|
   | `parchment` | Parchment（暖纸） | §5.1 v4 现状，品牌暖色调 | ✅ 默认 |
   | `particle` | Particle（冷蓝） | `UI_新设计.md` Token 体系，macOS 正统 accent 实底选中 | 可切换 |
-- **架构**：Theme 从静态 enum 升级为协议 + 实例（如 `Theme` protocol，
+- **架构**：Theme 从静态 enum 升级为协议 + 实例（`Theme` protocol，
   `ParchmentTheme` / `ParticleTheme` 实现），经 environment 注入视图；
-  `ThemeManager`（`@AppStorage("selectedTheme")`）持有当前主题并持久化——
-  是 M2 设置窗口的前置。
+  `ThemeManager`（持久化键 `selectedTheme`）持有当前主题并即时发布——
+  是 M2 设置窗口的前置。（实现注：因 `@AppStorage` 仅在 View/Scene
+  上下文生效，ThemeManager 直写同一 UserDefaults 键，行为等价。）
 - **Particle 主题 Token**（深色/浅色，源自 `UI_新设计.md` §一，已修正）：
   - accent `#2563EB`（深浅通用）；accentSoft = accent 15%/10% 不透明度
   - 背景三级：浅 `#FFFFFF` / `#F9FAFB` / `#F3F4F6`，深 `#0B0F17` / `#111827` / `#1F2937`

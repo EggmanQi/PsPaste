@@ -9,6 +9,9 @@ struct HistoryPanelView: View {
     @Query(sort: \ClipboardItem.createdAt, order: .reverse) private var allItems: [ClipboardItem]
     @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(ThemeManager.self) private var themeManager
+
+    private var theme: any Theme { themeManager.current }
 
     /// Text-field filtering (simple search; full search is M2).
     private var items: [ClipboardItem] {
@@ -22,18 +25,19 @@ struct HistoryPanelView: View {
     }
 
     var body: some View {
-        VStack(spacing: Theme.Panel.sectionSpacing) {
+        VStack(spacing: Metrics.Panel.sectionSpacing) {
             topBar
             Divider()
             historyArea
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // §5.1: opaque Kami parchment canvas (solid warm paper, Task 7).
-        .background(Theme.ColorToken.panelBackground(colorScheme))
+        // Opaque panel canvas in the active theme's color (solid warm paper
+        // for Parchment — translucent washes the tone out, Task 7).
+        .background(theme.panelBackground(colorScheme))
         .clipShape(
             UnevenRoundedRectangle(
-                topLeadingRadius: Theme.Panel.cornerRadius,
-                topTrailingRadius: Theme.Panel.cornerRadius
+                topLeadingRadius: theme.panelCornerRadius,
+                topTrailingRadius: theme.panelCornerRadius
             )
         )
         .contentShape(Rectangle())
@@ -46,45 +50,70 @@ struct HistoryPanelView: View {
         .overlay(alignment: .top) {
             if model.showsManualPasteHint {
                 Text("Copied — press ⌘V to paste")
-                    .font(.subheadline)
-                    .padding(.horizontal, Theme.Hint.horizontalPadding)
-                    .padding(.vertical, Theme.Hint.verticalPadding)
+                    .font(theme.hintFont)
+                    .padding(.horizontal, Metrics.Hint.horizontalPadding)
+                    .padding(.vertical, Metrics.Hint.verticalPadding)
                     .background(.regularMaterial, in: Capsule())
-                    .shadow(radius: Theme.Hint.shadowRadius)
-                    .padding(.top, Theme.Hint.topPadding)
+                    .shadow(radius: Metrics.Hint.shadowRadius)
+                    .padding(.top, Metrics.Hint.topPadding)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(Theme.Panel.animation, value: model.showsManualPasteHint)
+        .animation(Metrics.Panel.animation, value: model.showsManualPasteHint)
     }
 
     private var topBar: some View {
-        HStack(spacing: Theme.Panel.topBarItemSpacing) {
+        HStack(spacing: Metrics.Panel.topBarItemSpacing) {
             // Search slot (UI.md §2.3, Task 7): summons as a collapsed button;
             // clicking it, typing a character, or pressing ⌘F expands the field.
             searchSlot
             Spacer()
+            themeMenu
             Button("Pinboard") {}
                 .disabled(true)
-                .opacity(Theme.Control.disabledOpacity)
+                .opacity(Metrics.Control.disabledOpacity)
             Button(action: {}) {
                 Image(systemName: "gearshape")
             }
             .disabled(true)
-            .opacity(Theme.Control.disabledOpacity)
+            .opacity(Metrics.Control.disabledOpacity)
         }
-        .font(Theme.TextStyle.topBar)
-        .frame(height: Theme.Panel.topBarHeight)
-        .padding(.horizontal, Theme.Panel.topBarHorizontalPadding)
+        .font(theme.topBarFont)
+        .frame(height: Metrics.Panel.topBarHeight)
+        .padding(.horizontal, Metrics.Panel.topBarHorizontalPadding)
+    }
+
+    /// Theme switcher (UI.md §5.2): lists every theme, checkmarks the active
+    /// one, applies immediately and persists via ThemeManager.
+    private var themeMenu: some View {
+        Menu {
+            ForEach(themeManager.themes, id: \.id) { theme in
+                Button {
+                    themeManager.select(id: theme.id)
+                } label: {
+                    Label(
+                        theme.name,
+                        systemImage: theme.id == themeManager.current.id
+                            ? "checkmark"
+                            : ""
+                    )
+                }
+            }
+        } label: {
+            Image(systemName: "paintbrush")
+        }
+        .menuStyle(.borderlessButton)
+        // .borderlessButton collapses to the symbol's bounds without a frame.
+        .frame(width: Metrics.Panel.themeButtonWidth)
     }
 
     /// One fixed-height slot for both search states: collapsed icon button or
     /// expanded input field, same capsule fill, so the swap does not reflow
     /// the bar.
     private var searchSlot: some View {
-        HStack(spacing: Theme.SearchSlot.iconSpacing) {
+        HStack(spacing: Metrics.SearchSlot.iconSpacing) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
+                .foregroundStyle(theme.secondaryText(colorScheme))
             if model.searchExpanded {
                 TextField("Search clipboard history", text: $model.searchText)
                     .textFieldStyle(.plain)
@@ -92,9 +121,9 @@ struct HistoryPanelView: View {
                     .onSubmit { model.confirmSelection(in: items) }
             }
         }
-        .padding(.horizontal, Theme.SearchSlot.horizontalPadding)
-        .padding(.vertical, Theme.SearchSlot.verticalPadding)
-        .background(Theme.ColorToken.searchBarBackground(colorScheme), in: Capsule())
+        .padding(.horizontal, Metrics.SearchSlot.horizontalPadding)
+        .padding(.vertical, Metrics.SearchSlot.verticalPadding)
+        .background(theme.searchBarBackground(colorScheme), in: Capsule())
         .contentShape(Capsule())
         .onTapGesture {
             guard !model.searchExpanded else { return }
@@ -109,9 +138,9 @@ struct HistoryPanelView: View {
         ScrollViewReader { proxy in
             // No fixed height here: the area fills the space below the top bar
             // and the card row centers inside it, leaving verticalMargin above
-            // and below (§5.1 v2 spacing grid) instead of hugging the divider.
+            // and below (§5.1 spacing grid) instead of hugging the divider.
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: Theme.Card.spacing) {
+                LazyHStack(spacing: Metrics.Card.spacing) {
                     ForEach(items, id: \.id) { item in
                         CardView(
                             item: item,
@@ -123,8 +152,8 @@ struct HistoryPanelView: View {
                         .id(item.id)
                     }
                 }
-                .padding(.horizontal, Theme.Card.spacing)
-                .frame(height: Theme.Card.height)
+                .padding(.horizontal, Metrics.Card.spacing)
+                .frame(height: Metrics.Card.height)
                 .frame(maxHeight: .infinity)
             }
             .overlay {
@@ -141,7 +170,7 @@ struct HistoryPanelView: View {
                     source: source,
                     isTargetVisible: source == .mouseClick
                 ) else { return }
-                withAnimation(Theme.Panel.animation) {
+                withAnimation(Metrics.Panel.animation) {
                     proxy.scrollTo(newValue)
                 }
             }
@@ -149,12 +178,12 @@ struct HistoryPanelView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: Theme.EmptyState.spacing) {
+        VStack(spacing: Metrics.EmptyState.spacing) {
             Text("Copy something to get started")
-                .font(.headline)
+                .font(theme.emptyStateTitleFont)
             Text("Press ⌘⇧` anywhere to open this panel")
-                .font(.subheadline)
-                .foregroundStyle(Theme.ColorToken.secondaryText(colorScheme))
+                .font(theme.emptyStateSubtitleFont)
+                .foregroundStyle(theme.secondaryText(colorScheme))
         }
     }
 

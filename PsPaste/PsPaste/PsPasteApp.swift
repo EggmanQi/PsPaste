@@ -33,6 +33,9 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
                     // @Query needs a ModelContext in the environment; without
                     // this the panel silently shows an empty history.
                     .modelContainer(store.modelContainer)
+                    // The active skin (UI.md §5.2); ThemeManager publishes
+                    // changes, so theme switches re-render the panel.
+                    .environment(ThemeManager.shared)
             ),
             model: panelModel
         )

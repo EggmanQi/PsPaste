@@ -35,7 +35,8 @@ PsPaste (app target)
 ├── PanelController       # NSPanel 底部面板：唤出/收起、屏幕跟随、焦点策略
 ├── PasteService          # 写回剪贴板 + 辅助功能权限检测 + 模拟 ⌘V
 └── UI (SwiftUI)          # HistoryPanelView / CardView / SettingsView / MenuBarView
-                           # 视觉样式集中在 Theme/ 下，商业化时可整体替换
+                           # 视觉样式集中在 Theme/ 下（任务十一起：Theme 协议 +
+                           # 双实现 + ThemeManager environment 注入，商业化时可整体替换）
 ```
 
 依赖方向：`UI → {ClipboardMonitor, Storage, HotKeyService, PanelController, PasteService}`，

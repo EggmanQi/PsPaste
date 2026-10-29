@@ -21,6 +21,7 @@
 - [x] 任务八：HIG 化选中态与层次 + 缩略图损坏回退（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务九：选中效果 v3——默认无选中 + 选中材质化（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务十：选中态 v4 + 静态时间 + 长文中段截断（2026-10-29 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务十一：双主题系统 + Particle 主题 + 面板主题切换（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
 - [ ] 搜索过滤、Pinboard（单收藏夹）
@@ -151,3 +152,14 @@
   HistoryPanelView 最后两个样式魔数。新增 8 个单测，xcodebuild test 55/55
   通过、编译 0 警告。B 类待人工：v4 选中三重 cue 观感、静态时间、长文
   头尾可读性。
+- 2026-10-29：任务十一完成（双主题系统 + Particle + 面板切换）。架构：
+  静态 Theme enum 拆为 `Theme` 协议（色值/字号/圆角/选中策略）+ 共享
+  `Metrics` enum（卡片网格/间距/面板几何，跨主题不变量）+ `ThemeManager`
+  （@Observable，environment 注入，持久化键 selectedTheme——@AppStorage 仅
+  View 上下文生效，直写同键 UserDefaults，UI.md §5.2 已注）。Parchment 全部
+  值原样迁移（任务十 v4 选中规格即其默认选中样式）；Particle 按 §5.2 表格
+  落地（深色 accent 修正 #2563EB，选中 = accent 实底 + 白字无描边无投影，
+  未选中 = 背景二级实色 + 1pt border）。顶栏新增 paintbrush 主题菜单
+  （Menu + checkmark 当前项），切换即时生效。ARCHITECTURE §2 已回写。
+  新增 7 个单测，xcodebuild test 62/62 通过、编译 0 警告。B 类待人工：
+  菜单浮层层级、Particle 深浅色选中观感、重启保持、两主题布局一致性。

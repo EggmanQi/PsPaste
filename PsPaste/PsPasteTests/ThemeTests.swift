@@ -1,22 +1,59 @@
+import SwiftUI
 import XCTest
 @testable import PsPaste
 
-/// Layout invariants of the §5.1 v2 spacing grid: the card row must float with
+/// Layout invariants of the §5.1 spacing grid: the card row must float with
 /// symmetric vertical margins inside the history area, never hug the divider
-/// or leave a dead strip at the panel bottom.
+/// or leave a dead strip at the panel bottom. The grid is a cross-theme
+/// invariant (UI.md §5.2), so it lives in Metrics, not in any theme.
 final class ThemeTests: XCTestCase {
 
     func testCardHeightPlusVerticalMarginsFillsAreaBelowTopBar() {
         XCTAssertEqual(
-            Theme.Card.height + 2 * Theme.Card.verticalMargin,
-            Theme.Panel.height - Theme.Panel.topBarHeight,
+            Metrics.Card.height + 2 * Metrics.Card.verticalMargin,
+            Metrics.Panel.height - Metrics.Panel.topBarHeight,
             accuracy: 0.001
         )
     }
 
     func testVerticalMarginMatchesCardSpacingGrid() {
-        XCTAssertEqual(Theme.Card.verticalMargin, 14, accuracy: 0.001)
-        XCTAssertEqual(Theme.Card.spacing, 14, accuracy: 0.001)
-        XCTAssertEqual(Theme.Card.padding, 12, accuracy: 0.001)
+        XCTAssertEqual(Metrics.Card.verticalMargin, 14, accuracy: 0.001)
+        XCTAssertEqual(Metrics.Card.spacing, 14, accuracy: 0.001)
+        XCTAssertEqual(Metrics.Card.padding, 12, accuracy: 0.001)
+    }
+
+    // MARK: - Theme strategies (Task 11)
+
+    func testParchmentSelectionIsStrokePlusShadowWithoutForegroundOverride() {
+        let style = ParchmentTheme().selection(.light)
+        XCTAssertEqual(style.strokeWidth, 2, accuracy: 0.001)
+        XCTAssertEqual(style.shadowRadius, 8, accuracy: 0.001)
+        XCTAssertEqual(style.shadowY, 3, accuracy: 0.001)
+        XCTAssertEqual(style.shadowOpacity, 0.15, accuracy: 0.001)
+        XCTAssertNil(style.contentForeground)
+    }
+
+    func testParticleSelectionIsAccentFillWithWhiteTextNoStrokeNoShadow() {
+        for scheme in [ColorScheme.light, .dark] {
+            let style = ParticleTheme().selection(scheme)
+            XCTAssertEqual(style.strokeWidth, 0, accuracy: 0.001)
+            XCTAssertEqual(style.shadowRadius, 0, accuracy: 0.001)
+            XCTAssertNotNil(style.contentForeground)
+        }
+    }
+
+    @MainActor
+    func testDefaultRegistryOrderHasParchmentFirst() {
+        let manager = ThemeManager(defaults: makeDefaults())
+        XCTAssertEqual(manager.themes.count, 2)
+        XCTAssertEqual(manager.themes[0].id, "parchment")
+        XCTAssertEqual(manager.themes[1].id, "particle")
+        XCTAssertEqual(manager.current.id, "parchment")
+    }
+
+    private func makeDefaults() -> UserDefaults {
+        let defaults = UserDefaults(suiteName: "ThemeTests")!
+        defaults.removePersistentDomain(forName: "ThemeTests")
+        return defaults
     }
 }
