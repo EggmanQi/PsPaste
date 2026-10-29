@@ -1,89 +1,87 @@
 # 当前任务单
 
-> 给开发协作者（Kimi Code）：先读本文件，再读 `../ARCHITECTURE.md`、`../UI.md`
-> （§5.1 v4 选中规格、§5.2 主题系统，2026-10-29）。
+> 给开发协作者（Kimi Code）：先读本文件，再读 `../ARCHITECTURE.md`
+> （§3 清理策略 2026-10-29 已改 LRU）、`../UI.md`（§2.1 面板高度 v5、
+> §2.2 操作图标行、§5.1 v4、§5.2）。
 > 完成后更新 `../ROADMAP.md`；实现若偏离文档，回写对应文档。
 
-## 任务十：选中态 v4 + 静态时间 + 长文中段截断（已完成 2026-10-29）
+## 任务十二：LRU 淘汰 + 30 天周期移除（2026-10-29，用户决策）
 
-### 背景（用户决策 2026-10-29）
+### 背景
 
-v3 材质路线实测失效：面板底不透明，`.regularMaterial` 无可模糊内容，
-选中/未选中都呈近白色，1.02 缩放不可辨。用户从三个候选中选定
-**accent 2pt 描边 + 纯白卡 + 轻投影**（UI.md §5.1 v4）。同批交付：
-meta 行活体相对时间改静态标签；长文摘要改中段截断。任务十的 v4 选中
-规格是 Parchment 主题的默认选中样式（任务十一在此基础上做主题抽象）。
+- 淘汰依据从"最早创建"改为"最近使用"（LRU）；新增 30 天未使用移除。
+- 固定项（isPinned）豁免两条规则——固定动作在任务十三提供，本期固定
+  项价值 = 豁免淘汰。Pinboard 展示区延后，与标签/分类文件夹/私密文件夹
+  作为组织体系一并规划（已记录，勿提前实现）。
+- 规格源：ARCHITECTURE §3 清理（修订版全文在那里）。
 
-### 交付内容
+### 子任务 A：模型迁移
 
-- **A 选中态 v4**：选中卡 = 纯白实底（浅 #FFFFFF / 深 #E8E4DC 判断值）
-  + 系统 accent 2pt 描边 + 轻投影（radius 8 / y 3 / 15%，判断值）；删除
-  材质填充与 1.02 缩放（Theme.Selection 只留描边/投影三参数）。全部当帧
-  切换，无动画。
-- **B 静态时间**：`CardView.timeLabel(for:now:calendar:)` 纯函数——今天
-  `HH:mm`，更早 `MM-dd HH:mm`；DateFormatter 不显式继承 calendar 时区
-  的坑已修（显式 `formatter.timeZone = calendar.timeZone`）。meta 行不再
-  用 `.relative` 活体标签，消除周期性无意义重渲染。
-- **C 中段截断**：`ClipboardItem.middleTruncated(_:budget:)` 纯函数——
-  ≤300 字全量，超过取前 70% + "…" + 后 30%（`summary` 从 HistoryListView
-  的调试脚手架extension迁入 ClipboardItem.swift）；卡片行上限 6→8。
-- **D 顺收**：HistoryPanelView 残留魔数（VStack spacing 0、hint 投影 4）
-  收进 Theme（Panel.sectionSpacing / Hint.shadowRadius）。
+- `ClipboardItem` 新增 `lastUsedAt: Date`（默认 createdAt，需自定义
+  初始化保证；轻量迁移，保持全属性默认值/可选纪律兼容 M2 CloudKit）。
+- 迁移后旧数据行为：旧条目 lastUsedAt 回退为 createdAt（语义合理：
+  从未"被使用过"，创建即最后活跃）。
 
-### 验收记录
+### 子任务 B：touch 与淘汰逻辑
 
-- A 类：xcodebuild test **55/55** 通过（新增 8：时间标签 3 + 截断 5）；
-  编译 0 警告；视图层 grep 无样式魔数（HistoryListView 调试脚手架除外，
-  不在范围）。
-- B 类（人工，待用户验证）：① 选中卡纯白 + accent 描边 + 投影三重 cue
-  一眼可辨（深浅色）；② meta 行静态时间格式正确、无定时刷新；③ 长文
-  卡片头尾可读、中段省略；④ 行上限 8 行观感。
-
-## 任务十一：双主题系统 + Particle 主题 + 面板主题切换（2026-10-29）
-
-### 背景（用户决策）
-
-- 用户提交 `Docs/UI_新设计.md`（particle.ai 设计语言），经 review 采纳：
-  Token 体系 + accent 实底选中样式作为第二主题 **Particle**；其竖列表 HUD
-  布局**不采纳**。修正：深色 accent 用 `#2563EB`（文档原值 `#3B82F6` 白字
-  对比度仅 3.7:1，见 UI.md §5.2）。
-- 面板顶栏增加主题切换按钮，菜单中列出主题列表选择使用。
-- 规格源：UI.md §5.2（全部 Token 值、选中策略、公共不变量都在那里）。
-
-### 子任务 A：Theme 架构升级（ARCH 影响，需回写）
-
-- `Theme` 从静态 enum 升级为协议 + 实例：`ParchmentTheme`（现有全部值
-  原样迁移，行为不变）+ `ParticleTheme`，经 `.environment` 注入视图；
-  `ThemeManager` 用 `@AppStorage("selectedTheme")` 持久化当前主题 ID，
-  切换即时生效。
-- 迁移纪律：视图层只改取值方式（`theme.color.xxx` 取代
-  `Theme.ColorToken.xxx(scheme)`），不碰布局/交互逻辑；迁移后行为应与
-  迁移前逐像素一致（Parchment 下）。
-
-### 子任务 B：Particle 主题落地（UI.md §5.2）
-
-- Token 全部按 §5.2 表格实现（accent/三级背景/三级文字/边框/字号/圆角）。
-- 选中态：accent 实底 + 白字白图标（meta 行同样转白）；图片卡内容不受影响。
-  无描边无投影。深浅色都成立（accent 深浅同值 `#2563EB`）。
-- 未选中卡：三级背景二级（`#F9FAFB` / `#111827`）实色 + 1pt border。
-
-### 子任务 C：面板主题切换入口
-
-- 顶栏（Pinboard/设置按钮左侧）新增主题按钮：`Image(systemName:
-  "paintbrush")`，点击弹出 Menu 列出全部主题名，当前项 checkmark。
-- 切换即生效（environment 更新），持久化到 UserDefaults，重启保持。
+- PasteService confirm（用户粘贴了该条目）时更新 `lastUsedAt = now`。
+- 容量淘汰：超上限（1000）时按 `lastUsedAt` 升序删未固定项（取代原
+  createdAt 排序）。
+- 周期淘汰：启动时 + 每 24h Timer 扫一遍，`lastUsedAt` 早于 30 天前
+  的未固定项删除。周期/判定抽纯函数（`shouldEvict(lastUsedAt:now:ttl:)`
+  等），Timer 依赖注入可测；ttl（30 天）与扫描间隔进 ClipboardStore
+  语义常量。
+- 两条规则删除时照旧清理 payload 文件。
 
 ### 验收
 
-- A 类：`xcodebuild -project PsPaste/PsPaste.xcodeproj -scheme PsPaste test`
-  **62/62** 全过（新增 7：ThemeManager 切换/持久化/恢复/容错 4 +
-  主题策略与注册表 3）；编译 0 警告；Parchment 全部值原样迁移
-  （色值/字号/圆角/选中参数逐项核对）；视图层 grep 无样式魔数。
-  实现注：`@AppStorage` 仅 View/Scene 上下文生效，ThemeManager 直写
-  同一 `selectedTheme` UserDefaults 键（UI.md §5.2 已注）。
-- B 类（人工，待用户验证）：① 顶栏 paintbrush 菜单列出两主题、当前项
-  checkmark，切换即时生效、重启保持；② Particle 主题下选中卡 accent
-  实底 + 白字一眼可辨（深浅色），图片卡选中态正常；③ 两主题下卡片
-  布局/间距不变，Parchment 观感与迁移前一致；④ 菜单在 floating 面板
-  上的弹出层级正常（NSPanel level=.floating 下 SwiftUI Menu 的理论
-  风险点，需实测）。
+- A 类：xcodebuild test **67/67** 通过（新增 4：LRU 容量淘汰序、
+  shouldEvict 边界、周期扫描保留固定/新鲜/touched、markUsed touch）；
+  编译 0 警告。
+- 实现选型记录：`lastUsedAt` 为 `Date?` + `lastActivityAt` 回退
+  createdAt（非可选 + 默认值做不到"旧条目 = 创建即最后活跃"——
+  SwiftData 迁移默认值只能是迁移时刻值）；ARCHITECTURE §3 已回写。
+  markUsed 在 store 自有 context 重取（调用方可能持 @Query 实例）。
+- B 类（人工，待用户验证）：自用观察——固定项不被容量/周期淘汰；
+  30 天前的旧未固定项在启动扫描时被移除；常用条目粘贴后不被误删。
+
+## 任务十三：面板 v5——加高 + 居中 + 选中上移 + 操作图标行（2026-10-29）
+
+### 背景（用户重设计，取代原右键菜单方案）
+
+- 面板加高（320 → 400，判断值）；卡片行在内容区 **centerY 居中**。
+- 选中卡**上移**，卡下浮现操作图标行：**复制**（写回剪贴板、不写历史）
+  / **删除** / **固定·取消固定** / **分享**（禁用占位 Coming soon）。
+- 规格源：UI.md §2.1（高度）、§2.2（操作图标行）。
+
+### 子任务 A：几何调整
+
+- `Theme/Metrics` 面板高 320 → 400（或按内容推导的合理值，理由写进
+  ROADMAP）；卡片高度逻辑随内容区重新核算（卡片行居中后上下边距对称，
+  保留 verticalMargin 不变量守护）。
+- 卡片行无选中时 centerY 居中；选中卡上移量进 Metrics 语义常量。
+
+### 子任务 B：选中上移 + 操作图标行
+
+- 选中卡上移（建议 ~28pt，判断值），切换 150ms 内系统缓动；未选中卡
+  保持居中。
+- 操作图标行只挂在选中卡下方（同卡片宽度居中，图标 22pt 热区，间距
+  8pt 网格）：copy / delete / pin(unpin 状态切换) / share（disabled，
+  tooltip "Coming soon"）。
+- 行为：copy = PasteService 写回剪贴板（复用 markNextPasteboardWriteAsOwn
+  防回环，不写历史不粘贴）；delete = 删条目 + payload，选中回落邻卡；
+  pin = toggle isPinned；share 禁用。
+- 键盘导航时图标行跟随选中卡移动；Return 语义不变（直接粘贴）。
+- 面板外点击收起逻辑不变。
+
+### 子任务 C：固定项可视反馈
+
+- 未选中卡上固定项显示小 pin 角标（SF pin 图标，meta 行或卡角，判断
+  值，保持克制）——否则用户无法感知固定状态。
+
+### 验收
+
+- A 类：全量测试通过（新增上移量/图标行可见性/删除后选中回落等可测
+  部分，UI 位移抽纯函数则更好）；Debug 0 error 0 警告；grep 无魔数。
+- B 类（人工）：未选中卡片行居中；选中卡上移 + 图标行浮现；四个图标
+  行为正确；深浅色/两主题下观感一致；与任务十二联动：固定项不被淘汰。

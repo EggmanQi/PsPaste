@@ -16,6 +16,17 @@ final class ClipboardStore {
     /// Oldest unpinned records beyond this count are deleted (F2, default 1000).
     var historyLimit = 1000
 
+    /// Eviction policy (ARCHITECTURE §3, 2026-10-29 LRU revision): survival
+    /// is by last activity, pinned records are exempt from both rules.
+    enum Eviction {
+        /// Records idle longer than this are removed by the periodic sweep.
+        static let staleTTL: TimeInterval = 30 * 24 * 60 * 60
+        /// How often the periodic sweep runs (plus once at launch).
+        static let scanInterval: TimeInterval = 24 * 60 * 60
+    }
+
+    private var evictionTimer: Timer?
+
     private static let deviceName = Host.current().localizedName ?? "Unknown Mac"
 
     /// Designated initializer. Tests inject an in-memory container and a temp payloads root.
@@ -113,24 +124,82 @@ final class ClipboardStore {
         return itemID.uuidString
     }
 
-    /// Deletes the oldest unpinned records past the limit, including payload files.
-    private func pruneIfNeeded() {
+    /// Deletes one record and its payload files (shared by the eviction
+    /// rules and the panel's delete action).
+    func delete(_ item: ClipboardItem) {
+        if let payloadPath = item.payloadPath {
+            try? FileManager.default.removeItem(
+                at: payloadsRoot.appendingPathComponent(payloadPath, isDirectory: true)
+            )
+        }
+        context.delete(item)
+        try? context.save()
+    }
+
+    /// Touch on confirm: pasting an entry back makes it the most recently used.
+    /// Re-fetches in our own context — callers may hold instances from
+    /// another ModelContext (e.g. a @Query in the panel).
+    func markUsed(_ item: ClipboardItem) {
+        let itemID = item.id
         let descriptor = FetchDescriptor<ClipboardItem>(
-            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+            predicate: #Predicate { $0.id == itemID }
         )
+        guard let owned = try? context.fetch(descriptor).first else { return }
+        owned.lastUsedAt = Date()
+        try? context.save()
+    }
+
+    /// Periodic eviction (ARCHITECTURE §3 rule 2): unpinned records whose
+    /// last activity is older than the TTL are deleted. `now` is injectable
+    /// for tests; the timer fires this with the wall clock.
+    func evictStale(now: Date = Date()) {
+        let descriptor = FetchDescriptor<ClipboardItem>()
+        guard let all = try? context.fetch(descriptor) else { return }
+        for item in all where !item.isPinned && Self.shouldEvict(
+            lastActivityAt: item.lastActivityAt,
+            now: now,
+            ttl: Eviction.staleTTL
+        ) {
+            delete(item)
+        }
+    }
+
+    /// Starts the launch + every-24h stale sweep. The clock stays injectable
+    /// via `evictStale(now:)`; the timer only wires wall-clock firing.
+    func startEvictionTimer() {
+        evictionTimer?.invalidate()
+        evictionTimer = Timer.scheduledTimer(
+            withTimeInterval: Eviction.scanInterval,
+            repeats: true
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.evictStale() }
+        }
+    }
+
+    /// Eviction decision, a pure function: strictly older than the TTL.
+    nonisolated static func shouldEvict(
+        lastActivityAt: Date,
+        now: Date,
+        ttl: TimeInterval
+    ) -> Bool {
+        now.timeIntervalSince(lastActivityAt) > ttl
+    }
+
+    /// Capacity eviction (ARCHITECTURE §3 rule 1): beyond the limit, the
+    /// least recently used unpinned records go first, payloads included.
+    private func pruneIfNeeded() {
+        let descriptor = FetchDescriptor<ClipboardItem>()
         guard let all = try? context.fetch(descriptor), all.count > historyLimit else { return }
 
+        let lruOrder = all
+            .filter { !$0.isPinned }
+            .sorted { $0.lastActivityAt < $1.lastActivityAt }
+
         var excess = all.count - historyLimit
-        for item in all where !item.isPinned {
+        for item in lruOrder {
             guard excess > 0 else { break }
-            if let payloadPath = item.payloadPath {
-                try? FileManager.default.removeItem(
-                    at: payloadsRoot.appendingPathComponent(payloadPath, isDirectory: true)
-                )
-            }
-            context.delete(item)
+            delete(item)
             excess -= 1
         }
-        try? context.save()
     }
 }

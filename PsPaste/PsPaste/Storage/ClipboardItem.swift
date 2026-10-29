@@ -22,6 +22,14 @@ final class ClipboardItem {
     var thumbnailPath: String?
     var isPinned: Bool
     var contentHash: String
+    /// Last time the user pasted this entry back (Task 12, LRU eviction).
+    /// Nil for records captured before this field existed — `lastActivityAt`
+    /// falls back to `createdAt`, which is the right semantics for a record
+    /// that was never used after its capture.
+    var lastUsedAt: Date?
+
+    /// Eviction clock: last use wins, creation is the floor.
+    var lastActivityAt: Date { lastUsedAt ?? createdAt }
 
     init(
         id: UUID = UUID(),
@@ -33,7 +41,8 @@ final class ClipboardItem {
         payloadPath: String? = nil,
         thumbnailPath: String? = nil,
         isPinned: Bool = false,
-        contentHash: String
+        contentHash: String,
+        lastUsedAt: Date? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -45,6 +54,7 @@ final class ClipboardItem {
         self.thumbnailPath = thumbnailPath
         self.isPinned = isPinned
         self.contentHash = contentHash
+        self.lastUsedAt = lastUsedAt
     }
 }
 

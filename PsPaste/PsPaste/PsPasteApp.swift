@@ -74,11 +74,15 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
         installMainMenu()
         monitor.start()
         hotKeyService.start()
+        // Stale sweep at launch, then every 24h (ARCHITECTURE §3 rule 2).
+        store.evictStale()
+        store.startEvictionTimer()
     }
 
     // MARK: - Paste (ARCHITECTURE §7)
 
     private func handleRestore(_ item: ClipboardItem) {
+        store.markUsed(item)
         monitor.markNextPasteboardWriteAsOwn()
         PasteService.restoreToGeneralPasteboard(
             item,

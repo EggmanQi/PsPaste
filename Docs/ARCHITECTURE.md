@@ -56,8 +56,14 @@ PsPaste (app target)
     var thumbnailPath: String?      // 图片缩略图路径
     var isPinned: Bool
     var contentHash: String         // 去重
+    var lastUsedAt: Date?           // 任务十二：LRU 时钟；nil（旧数据）回退 createdAt
 }
 ```
+
+> `lastUsedAt` 实现为可选 + `lastActivityAt`（`lastUsedAt ?? createdAt`）
+> 而非"默认 createdAt 的非可选属性"：SwiftData 迁移默认值只能取迁移时刻的
+> 固定值，旧记录会被误判为"刚用过"；可选 + 回退才满足"旧条目语义 = 创建即
+> 最后活跃"。
 
 - **大对象不进数据库**：图片、RTF、HTML 原始数据写入
   `~/Library/Application Support/PsPaste/Payloads/<uuid>/`，DB 只存路径与元数据。
@@ -66,7 +72,14 @@ PsPaste (app target)
 - **图片同步策略（MVP 简化）**：图片原始数据也随记录同步可接受（SwiftData 对
   二进制大字段支持有限，故 MVP 允许图片 payload 只保存在本地、其他设备显示
   “仅本机可用”占位；V2 再评估 CKAsset 方案）。文本/链接必须完整同步。
-- **清理**：超过上限时删除最旧的 `isPinned == false` 项，同时删除其 payload 文件。
+- **清理（2026-10-29 修订，LRU + 周期）**：两条淘汰规则，均豁免 `isPinned` 项，
+  删除时同时清理 payload 文件。
+  ① **容量淘汰（LRU）**：超过上限（默认 1000 条，不变）时，删除
+  `lastUsedAt` 最旧的未固定项——"最近使用"取代"最早创建"作为存活依据。
+  ② **周期淘汰**：`lastUsedAt` 早于 30 天前的未固定项删除；触发时机为
+  启动时 + 每 24h 定时（可注入时钟，纯函数 `shouldEvict(now:ttl:)` 可测）。
+  模型新增 `lastUsedAt`（默认 = createdAt；SwiftData 轻量迁移，保持全属性
+  默认值纪律以兼容 M2 CloudKit）；PasteService 确认粘贴（confirm）时 touch。
 
 ## 4. 剪贴板捕获（ClipboardMonitor）
 

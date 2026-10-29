@@ -22,6 +22,7 @@
 - [x] 任务九：选中效果 v3——默认无选中 + 选中材质化（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务十：选中态 v4 + 静态时间 + 长文中段截断（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务十一：双主题系统 + Particle 主题 + 面板主题切换（2026-10-29 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务十二：LRU 淘汰 + 30 天周期移除（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
 - [ ] 搜索过滤、Pinboard（单收藏夹）
@@ -174,3 +175,13 @@
   同日补漏：meta 行新增文本字数（charCountLabel 千分位，en_US 定 locale——
   POSIX locale 不分千分位，测试 caught），63/63 通过。B 类用户已验：UI/
   功能正常。
+- 2026-10-29：任务十二完成（LRU 淘汰 + 30 天周期移除）。模型新增
+  `lastUsedAt: Date?`（实现选型：可选 + `lastActivityAt` 回退 createdAt，
+  因 SwiftData 迁移默认值只能给迁移时刻值、旧记录会被误判最近用过——
+  ARCHITECTURE §3 已注）。容量淘汰改为按 lastActivityAt 升序删未固定项；
+  周期淘汰 = 启动时 + 每 24h Timer 扫 30 天未动用的未固定项（判定纯函数
+  ClipboardStore.shouldEvict，时钟经 evictStale(now:) 注入可测；ttl 与扫描
+  间隔为 Eviction 语义常量）；confirm 粘贴时 store.markUsed touch（含跨
+  context 重取，调用方可能持 @Query 实例）；删除统一走 store.delete（含
+  payload 清理），为任务十三删除动作铺路。新增 4 个单测，xcodebuild test
+  67/67 通过、编译 0 警告。B 类待人工：自用观察固定项豁免与 30 天清理。
