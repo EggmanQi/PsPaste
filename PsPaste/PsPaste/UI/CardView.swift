@@ -77,6 +77,17 @@ struct CardView: View {
         return formatter.string(from: date)
     }
 
+    /// Character-count label for the meta row (UI.md §2.2): the total count
+    /// stays visible even when the preview is middle-truncated. Locale pinned
+    /// for deterministic grouping (POSIX does not group thousands).
+    nonisolated static func charCountLabel(_ count: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.numberStyle = .decimal
+        let grouped = formatter.string(from: NSNumber(value: count)) ?? "\(count)"
+        return "\(grouped) 字"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.Card.metaSpacing) {
             content
@@ -188,6 +199,9 @@ struct CardView: View {
                     .frame(width: Metrics.Card.metaIconSize, height: Metrics.Card.metaIconSize)
             }
             Text(SourceAppDisplay.name(for: item.sourceAppBundleID))
+            if let count = item.text?.count, count > 0 {
+                Text(Self.charCountLabel(count))
+            }
             Spacer(minLength: 0)
             Text(Self.timeLabel(for: item.createdAt))
         }

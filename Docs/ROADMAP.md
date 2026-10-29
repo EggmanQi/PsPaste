@@ -163,3 +163,14 @@
   （Menu + checkmark 当前项），切换即时生效。ARCHITECTURE §2 已回写。
   新增 7 个单测，xcodebuild test 62/62 通过、编译 0 警告。B 类待人工：
   菜单浮层层级、Particle 深浅色选中观感、重启保持、两主题布局一致性。
+- 2026-10-29：任务十、十一完成。十：选中 v4（纯白卡 + accent 2pt 描边 +
+  轻投影，材质与缩放删除）、静态时间（CardView.timeLabel 纯函数，修复
+  DateFormatter 不继承 calendar 时区的隐藏 bug）、长文中段截断
+  （ClipboardItem.middleTruncated，≤300 全量 / 超出前 70% … 后 30%，行上限
+  8），55/55 通过。十一：Theme 协议 + ParchmentTheme（值原样迁移）+
+  ParticleTheme（UI.md §5.2 Token，深色 accent 修正 #2563EB，选中 = accent
+  实底 + 白字）+ Metrics 跨主题不变量 + ThemeManager（UserDefaults 直写，
+  已注文档），顶栏 paintbrush 菜单切换主题，ARCH §2 回写，62/62 通过。
+  同日补漏：meta 行新增文本字数（charCountLabel 千分位，en_US 定 locale——
+  POSIX locale 不分千分位，测试 caught），63/63 通过。B 类用户已验：UI/
+  功能正常。

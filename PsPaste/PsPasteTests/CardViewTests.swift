@@ -72,4 +72,10 @@ final class CardViewTests: XCTestCase {
             "12-31 18:20"
         )
     }
+
+    func testCharCountLabelGroupsThousands() {
+        XCTAssertEqual(CardView.charCountLabel(5), "5 字")
+        XCTAssertEqual(CardView.charCountLabel(1234), "1,234 字")
+        XCTAssertEqual(CardView.charCountLabel(1234567), "1,234,567 字")
+    }
 }
