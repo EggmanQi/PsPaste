@@ -106,6 +106,16 @@ struct CardView: View {
             y: isSelected ? selectionStyle.shadowY : 0
         )
         .contentShape(RoundedRectangle(cornerRadius: theme.cardCornerRadius))
+        .overlay(alignment: .topTrailing) {
+            // Pinned state is invisible otherwise (Pinboard UI is deferred);
+            // the selected card shows it through the action row instead.
+            if item.isPinned && !isSelected {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: Metrics.Card.pinBadgeSize))
+                    .foregroundStyle(secondaryForeground)
+                    .padding(Metrics.Card.pinBadgeInset)
+            }
+        }
         .onTapGesture(count: 1) { handleTap() }
         .task(id: item.id) {
             guard isImage, thumbnail == nil, !imageLoadFailed else { return }

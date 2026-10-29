@@ -23,6 +23,7 @@
 - [x] 任务十：选中态 v4 + 静态时间 + 长文中段截断（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务十一：双主题系统 + Particle 主题 + 面板主题切换（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 - [x] 任务十二：LRU 淘汰 + 30 天周期移除（2026-10-29 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务十三：面板 v5——加高 + 选中上移 + 操作图标行（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
 - [ ] 搜索过滤、Pinboard（单收藏夹）
@@ -185,3 +186,18 @@
   context 重取，调用方可能持 @Query 实例）；删除统一走 store.delete（含
   payload 清理），为任务十三删除动作铺路。新增 4 个单测，xcodebuild test
   67/67 通过、编译 0 警告。B 类待人工：自用观察固定项豁免与 30 天清理。
+- 2026-10-29：任务十三完成（面板 v5：加高 + 选中上移 + 操作图标行）。
+  面板高 320→400（Metrics.Panel.height，为选中卡上移与操作行让位，卡片
+  高度随公式重核算 332、verticalMargin 14 不变量守护仍成立）；选中卡
+  上移 28pt（150ms 缓动），每卡预留等高的操作行槽位（22pt 图标热区、
+  8pt 网格），选中变化网格零位移；操作行四图标：copy（写回剪贴板、
+  markNextPasteboardWriteAsOwn 防回环、不粘贴不收起不写历史）/ delete
+  （store.delete 含 payload 清理，选中回落邻卡——纯函数
+  PanelModel.selectionAfterDelete 取后邻、无后邻取前邻）/ pin toggle
+  （store.togglePin；未选中固定卡显示 pin 角标，选中态由操作行图标体现）/
+  share（禁用占位，tooltip Coming soon）。动作经 PanelModel 回调装配，
+  store.delete/togglePin 按 id 在自有 context 重取。字数统计由用户
+  0760e1c 先行交付（charCountLabel，meta 行 千分位 "1,234 字"）。
+  新增 6 个单测，xcodebuild test 73/73 通过、编译 0 警告（顺带清理两个
+  既有测试告警）。B 类待人工：400pt 观感、上移+操作行、三图标行为、
+  深浅色/两主题一致性、固定项豁免联动。

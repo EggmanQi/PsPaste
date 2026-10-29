@@ -125,14 +125,33 @@ final class ClipboardStore {
     }
 
     /// Deletes one record and its payload files (shared by the eviction
-    /// rules and the panel's delete action).
+    /// rules and the panel's delete action). Re-fetches in our own context —
+    /// callers may hold instances from another ModelContext (e.g. a @Query
+    /// in the panel).
     func delete(_ item: ClipboardItem) {
-        if let payloadPath = item.payloadPath {
+        let itemID = item.id
+        let descriptor = FetchDescriptor<ClipboardItem>(
+            predicate: #Predicate { $0.id == itemID }
+        )
+        guard let owned = try? context.fetch(descriptor).first else { return }
+        if let payloadPath = owned.payloadPath {
             try? FileManager.default.removeItem(
                 at: payloadsRoot.appendingPathComponent(payloadPath, isDirectory: true)
             )
         }
-        context.delete(item)
+        context.delete(owned)
+        try? context.save()
+    }
+
+    /// Toggles the pinned flag (UI.md §2.2 v5); pinned records are exempt
+    /// from both eviction rules (ARCHITECTURE §3).
+    func togglePin(_ item: ClipboardItem) {
+        let itemID = item.id
+        let descriptor = FetchDescriptor<ClipboardItem>(
+            predicate: #Predicate { $0.id == itemID }
+        )
+        guard let owned = try? context.fetch(descriptor).first else { return }
+        owned.isPinned.toggle()
         try? context.save()
     }
 

@@ -139,4 +139,59 @@ final class PanelModelTests: XCTestCase {
         model.updateSelectionAfterFilter(in: [])
         XCTAssertNil(model.selectedID)
     }
+
+    // MARK: - Task 13: delete selection fallback (UI.md §2.2 v5)
+
+    func testSelectionAfterDeletePrefersNextOlderItem() {
+        let ids = (0..<5).map { UUID(uuidString: "00000000-0000-0000-0000-00000000000\($0)")! }
+        XCTAssertEqual(
+            PanelModel.selectionAfterDelete(of: ids[2], in: ids),
+            ids[3]
+        )
+    }
+
+    func testSelectionAfterDeleteFallsBackToPreviousWhenLast() {
+        let ids = (0..<3).map { UUID(uuidString: "00000000-0000-0000-0000-00000000001\($0)")! }
+        XCTAssertEqual(
+            PanelModel.selectionAfterDelete(of: ids[2], in: ids),
+            ids[1]
+        )
+    }
+
+    func testSelectionAfterDeleteWithSingleItemReturnsNil() {
+        let id = UUID()
+        XCTAssertNil(PanelModel.selectionAfterDelete(of: id, in: [id]))
+    }
+
+    func testSelectionAfterDeleteWithUnknownIDReturnsNil() {
+        let ids = [UUID(), UUID()]
+        XCTAssertNil(PanelModel.selectionAfterDelete(of: UUID(), in: ids))
+    }
+
+    @MainActor
+    func testDeleteItemFallsBackToNeighborSelection() {
+        let model = PanelModel()
+        let items = [makeItem("a"), makeItem("b"), makeItem("c")]
+        let ids = items.map(\.id)
+        var deleted: ClipboardItem?
+        model.onDelete = { deleted = $0 }
+
+        model.selectViaMouse(ids[1])
+        model.deleteItem(items[1], in: items)
+
+        XCTAssertEqual(deleted?.id, ids[1])
+        XCTAssertEqual(model.selectedID, ids[2])
+    }
+
+    @MainActor
+    func testDeleteUnselectedItemKeepsSelection() {
+        let model = PanelModel()
+        let items = [makeItem("a"), makeItem("b"), makeItem("c")]
+        let ids = items.map(\.id)
+
+        model.selectViaMouse(ids[0])
+        model.deleteItem(items[2], in: items)
+
+        XCTAssertEqual(model.selectedID, ids[0])
+    }
 }

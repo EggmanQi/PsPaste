@@ -29,6 +29,11 @@ final class PanelModel {
     var onRestore: ((ClipboardItem) -> Void)?
     /// Wired by `PanelController`.
     var onRequestClose: (() -> Void)?
+    /// Wired by the app: the v5 action row (UI.md §2.2) — copy-only write-back,
+    /// pin toggle, delete. Business effects stay in the assembly, not the UI.
+    var onCopyOnly: ((ClipboardItem) -> Void)?
+    var onTogglePin: ((ClipboardItem) -> Void)?
+    var onDelete: ((ClipboardItem) -> Void)?
 
     /// Called by the controller right before the panel is shown.
     func prepareForShow() {
@@ -71,6 +76,32 @@ final class PanelModel {
         } else {
             searchText = ""
         }
+    }
+
+    /// Action row: write back to the pasteboard without pasting, closing, or
+    /// re-recording history (UI.md §2.2 v5).
+    func requestCopy(of item: ClipboardItem) {
+        onCopyOnly?(item)
+    }
+
+    func togglePin(of item: ClipboardItem) {
+        onTogglePin?(item)
+    }
+
+    /// Action row delete: the selection falls back to the neighbor card —
+    /// the next older item takes the freed slot, else the previous newer one.
+    func deleteItem(_ item: ClipboardItem, in items: [ClipboardItem]) {
+        onDelete?(item)
+        guard selectedID == item.id else { return }
+        selectionChangeSource = .programmatic
+        selectedID = Self.selectionAfterDelete(of: item.id, in: items.map(\.id))
+    }
+
+    /// Selection fallback after removal, a pure function.
+    nonisolated static func selectionAfterDelete(of id: UUID, in ids: [UUID]) -> UUID? {
+        guard let index = ids.firstIndex(of: id) else { return nil }
+        if index + 1 < ids.count { return ids[index + 1] }
+        return index > 0 ? ids[index - 1] : nil
     }
 
     /// The current selection, or nil when nothing is selected. No fallback:

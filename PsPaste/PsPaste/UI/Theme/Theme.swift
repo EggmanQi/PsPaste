@@ -65,7 +65,9 @@ struct SelectionStyle: Equatable {
 enum Metrics {
 
     enum Panel {
-        static let height: CGFloat = 320
+        /// v5 (UI.md §2.1): raised from 320 to make room for the selected
+        /// card's lift and the action icon row below it.
+        static let height: CGFloat = 400
         static let topBarHeight: CGFloat = 40
         static let slideOffset: CGFloat = 16
         static let animationDuration: TimeInterval = 0.18
@@ -101,6 +103,20 @@ enum Metrics {
         /// top bar.
         static let verticalMargin: CGFloat = 14
         static let height = Panel.height - Panel.topBarHeight - 2 * verticalMargin
+
+        /// v5 (UI.md §2.2): the selected card rises to make room for the
+        /// action icon row in the reserved slot below every card.
+        static let selectionLift: CGFloat = 28
+        static let selectionLiftDuration: TimeInterval = 0.15
+        /// Reserved slot under each card that hosts the selected card's
+        /// action icons; the fixed height keeps the row grid stable when
+        /// selection moves.
+        static let actionRowHeight: CGFloat = 22
+        static let actionRowSpacing: CGFloat = 8
+        static let actionIconSize: CGFloat = 22
+        /// Restrained pin badge on pinned, unselected cards.
+        static let pinBadgeSize: CGFloat = 10
+        static let pinBadgeInset: CGFloat = 6
     }
 
     /// The collapsed search button / expanded search field capsule (top bar).

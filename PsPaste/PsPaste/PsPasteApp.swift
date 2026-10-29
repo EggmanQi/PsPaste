@@ -54,6 +54,17 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
             store.containsNewest(matchingHash: snapshot.contentHash)
         }
         panelModel.onRestore = { [weak self] item in self?.handleRestore(item) }
+        panelModel.onCopyOnly = { [monitor, store] item in
+            // Copy-only: write back without pasting, closing, or re-recording
+            // history — the TransientType mark prevents the re-capture (§2.2 v5).
+            monitor.markNextPasteboardWriteAsOwn()
+            PasteService.restoreToGeneralPasteboard(
+                item,
+                payloads: store.payloadContents(for: item)
+            )
+        }
+        panelModel.onTogglePin = { [store] item in store.togglePin(item) }
+        panelModel.onDelete = { [store] item in store.delete(item) }
         hotKeyService.onToggle = { [panelController] in panelController.toggle() }
         hotKeyService.onRegistrationStateChange = { [weak self] state in
             guard let self else { return }

@@ -4,10 +4,12 @@ import XCTest
 
 final class PasteServiceTests: XCTestCase {
 
+    @MainActor
     func testTrustedPermissionChoosesDirectPaste() {
         XCTAssertEqual(PasteService.action(isAccessibilityTrusted: true), .directPaste)
     }
 
+    @MainActor
     func testUntrustedPermissionChoosesCopyOnly() {
         XCTAssertEqual(PasteService.action(isAccessibilityTrusted: false), .copyOnly)
     }

@@ -142,12 +142,33 @@ struct HistoryPanelView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: Metrics.Card.spacing) {
                     ForEach(items, id: \.id) { item in
-                        CardView(
-                            item: item,
-                            isSelected: item.id == effectiveSelectedID,
-                            store: store,
-                            onSelect: { model.selectViaMouse(item.id) },
-                            onConfirm: { model.confirmSelection(in: items) }
+                        let selected = item.id == effectiveSelectedID
+                        VStack(spacing: Metrics.Card.actionRowSpacing) {
+                            CardView(
+                                item: item,
+                                isSelected: selected,
+                                store: store,
+                                onSelect: { model.selectViaMouse(item.id) },
+                                onConfirm: { model.confirmSelection(in: items) }
+                            )
+                            // The selected card rises and reveals its action
+                            // row; every card reserves the slot so the grid
+                            // never moves when selection changes (§2.2 v5).
+                            .offset(y: selected ? -Metrics.Card.selectionLift : 0)
+
+                            CardActionRow(
+                                item: item,
+                                onCopy: { model.requestCopy(of: item) },
+                                onDelete: { model.deleteItem(item, in: items) },
+                                onTogglePin: { model.togglePin(of: item) }
+                            )
+                            .frame(height: Metrics.Card.actionRowHeight)
+                            .opacity(selected ? 1 : 0)
+                            .allowsHitTesting(selected)
+                        }
+                        .animation(
+                            .easeOut(duration: Metrics.Card.selectionLiftDuration),
+                            value: selected
                         )
                         .id(item.id)
                     }

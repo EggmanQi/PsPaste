@@ -11,7 +11,7 @@ final class HotKeyServiceTests: XCTestCase {
     ) -> (HotKeyService, current: () -> Date, calls: () -> Int) {
         var scripted = results
         var callCount = 0
-        var currentDate = start
+        let currentDate = start
         let service = HotKeyService(
             now: { currentDate },
             retryInterval: interval,
