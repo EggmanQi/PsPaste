@@ -41,8 +41,17 @@ final class SettingsWindowController: NSWindowController {
     private var activationObserver: NSObjectProtocol?
 
     func showSettings() {
+        // Ordering an already-visible window of an inactive app to the front
+        // can be silently ignored by AppKit; ordering it out first makes the
+        // re-order-in raise it above every other window at its level.
+        if let window, window.isVisible {
+            window.orderOut(nil)
+        }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+
+        // Key status needs an active app; NSApp.activate() completes
+        // asynchronously, so re-front the window once activation lands.
         guard !NSApp.isActive else { return }
 
         NSApp.activate()
