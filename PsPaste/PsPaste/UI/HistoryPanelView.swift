@@ -54,11 +54,10 @@ struct HistoryPanelView: View {
             Button("Pinboard") {}
                 .disabled(true)
                 .opacity(Metrics.Control.disabledOpacity)
-            Button(action: {}) {
+            Button(action: { model.onOpenSettings?() }) {
                 Image(systemName: "gearshape")
             }
-            .disabled(true)
-            .opacity(Metrics.Control.disabledOpacity)
+            .help("Settings (⌘,)")
         }
         .font(theme.topBarFont)
         .frame(height: Metrics.Panel.topBarHeight)
