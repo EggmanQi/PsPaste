@@ -1,96 +1,53 @@
 # 当前任务单
 
-> 给开发协作者（Kimi Code）：先读本文件，再读 `../ARCHITECTURE.md`
-> （§3 清理策略 2026-10-29 已改 LRU）、`../UI.md`（§2.1 面板高度 v5、
-> §2.2 操作图标行、§5.1 v4、§5.2）。
+> 给开发协作者（Kimi Code）：先读本文件，再读 `../ARCHITECTURE.md`、
+> `../UI.md`（§2.3 交互、§3 菜单栏、§4 设置窗口、§5.2 主题系统）。
 > 完成后更新 `../ROADMAP.md`；实现若偏离文档，回写对应文档。
 
-## 任务十二：LRU 淘汰 + 30 天周期移除（2026-10-29，用户决策）
+## 任务十四：设置窗口 v1 + 排除应用管理 + 搜索增强（2026-10-30）
 
-### 背景
+### 背景（M2 推进）
 
-- 淘汰依据从"最早创建"改为"最近使用"（LRU）；新增 30 天未使用移除。
-- 固定项（isPinned）豁免两条规则——固定动作在任务十三提供，本期固定
-  项价值 = 豁免淘汰。Pinboard 展示区延后，与标签/分类文件夹/私密文件夹
-  作为组织体系一并规划（已记录，勿提前实现）。
-- 规格源：ARCHITECTURE §3 清理（修订版全文在那里）。
+- 菜单栏已有 "Settings…" 禁用占位（UI.md §3），本期落地为真窗口。
+- ARCH §4 跳过规则里已有"排除 App"，但排除列表此前无管理界面——本期
+  把排除应用做成设置项（UserDefaults 持久化），并支持从运行中 App 选取。
+- 搜索从"仅 text 字段 contains"增强为搜索完整版。
 
-### 子任务 A：模型迁移
+### 子任务 A：设置窗口 v1（UI.md §4，只做通用/隐私/关于）
 
-- `ClipboardItem` 新增 `lastUsedAt: Date`（默认 createdAt，需自定义
-  初始化保证；轻量迁移，保持全属性默认值/可选纪律兼容 M2 CloudKit）。
-- 迁移后旧数据行为：旧条目 lastUsedAt 回退为 createdAt（语义合理：
-  从未"被使用过"，创建即最后活跃）。
+- macOS 原生 `Settings` Scene（SwiftUI）或 NSWindowController + TabView，
+  与现有 AppKit 委托结构协调（勿破坏 LSUIElement 关闭期的 Dock 可见
+  开发与菜单栏入口；⌘, 接通）。
+- **通用 Tab**：历史上限（默认 1000，数字输入，写回 store.historyLimit
+  生效路径）；保留时长（30 天，与 Eviction.staleTTL 打通——做成可调则
+  两值同源）；主题选择（复用 ThemeManager 全部主题，Radio/Picker）。
+- **隐私 Tab**：排除应用列表（显示 App 名 + Bundle ID + 图标，添加/
+  移除）；**从运行中 App 选取**（NSWorkspace 枚举前台可激活应用，面板
+  选择后写入排除列表）；清空历史按钮（确认后清空 DB + payload 目录）。
+- **关于 Tab**：版本号（从 Bundle 读）、辅助功能权限状态 + 授权入口
+  （复用菜单栏已有逻辑）。
+- 同步 Tab **不做**（iCloud 阻塞于付费账号，占位注明 Coming soon 即可，
+  或直接不出现在 v1——实现时选后者，少一个死 Tab）。
+- 所有设置读写 UserDefaults 语义键，默认值与现状一致（零迁移）。
 
-### 子任务 B：touch 与淘汰逻辑
+### 子任务 B：排除应用生效链路
 
-- PasteService confirm（用户粘贴了该条目）时更新 `lastUsedAt = now`。
-- 容量淘汰：超上限（1000）时按 `lastUsedAt` 升序删未固定项（取代原
-  createdAt 排序）。
-- 周期淘汰：启动时 + 每 24h Timer 扫一遍，`lastUsedAt` 早于 30 天前
-  的未固定项删除。周期/判定抽纯函数（`shouldEvict(lastUsedAt:now:ttl:)`
-  等），Timer 依赖注入可测；ttl（30 天）与扫描间隔进 ClipboardStore
-  语义常量。
-- 两条规则删除时照旧清理 payload 文件。
+- ClipboardMonitor 的"排除 App"规则改为读 UserDefaults 列表（目前
+  是写死或注入的——以 ARCH §4 现状为准改造），列表变化即时生效
+  （排除列表变化时捕获线程下一次轮询即遵守，无需重启）。
+- 面板显示不做处理（被排除 App 的复制静默跳过，符合预期）。
 
-### 验收
+### 子任务 C：搜索增强（UI.md §2.3 完整版）
 
-- A 类：xcodebuild test **67/67** 通过（新增 4：LRU 容量淘汰序、
-  shouldEvict 边界、周期扫描保留固定/新鲜/touched、markUsed touch）；
-  编译 0 警告。
-- 实现选型记录：`lastUsedAt` 为 `Date?` + `lastActivityAt` 回退
-  createdAt（非可选 + 默认值做不到"旧条目 = 创建即最后活跃"——
-  SwiftData 迁移默认值只能是迁移时刻值）；ARCHITECTURE §3 已回写。
-  markUsed 在 store 自有 context 重取（调用方可能持 @Query 实例）。
-- B 类（人工，待用户验证）：自用观察——固定项不被容量/周期淘汰；
-  30 天前的旧未固定项在启动扫描时被移除；常用条目粘贴后不被误删。
-
-## 任务十三：面板 v5——加高 + 居中 + 选中上移 + 操作图标行（2026-10-29）
-
-### 背景（用户重设计，取代原右键菜单方案）
-
-- 面板加高（320 → 400，判断值）；卡片行在内容区 **centerY 居中**。
-- 选中卡**上移**，卡下浮现操作图标行：**复制**（写回剪贴板、不写历史）
-  / **删除** / **固定·取消固定** / **分享**（禁用占位 Coming soon）。
-- 规格源：UI.md §2.1（高度）、§2.2（操作图标行）。
-
-### 子任务 A：几何调整
-
-- `Theme/Metrics` 面板高 320 → 400（或按内容推导的合理值，理由写进
-  ROADMAP）；卡片高度逻辑随内容区重新核算（卡片行居中后上下边距对称，
-  保留 verticalMargin 不变量守护）。
-- 卡片行无选中时 centerY 居中；选中卡上移量进 Metrics 语义常量。
-
-### 子任务 B：选中上移 + 操作图标行
-
-- 选中卡上移（建议 ~28pt，判断值），切换 150ms 内系统缓动；未选中卡
-  保持居中。
-- 操作图标行只挂在选中卡下方（同卡片宽度居中，图标 22pt 热区，间距
-  8pt 网格）：copy / delete / pin(unpin 状态切换) / share（disabled，
-  tooltip "Coming soon"）。
-- 行为：copy = PasteService 写回剪贴板（复用 markNextPasteboardWriteAsOwn
-  防回环，不写历史不粘贴）；delete = 删条目 + payload，选中回落邻卡；
-  pin = toggle isPinned；share 禁用。
-- 键盘导航时图标行跟随选中卡移动；Return 语义不变（直接粘贴）。
-- 面板外点击收起逻辑不变。
-
-### 子任务 C：固定项可视反馈
-
-- 未选中卡上固定项显示小 pin 角标（SF pin 图标，meta 行或卡角，判断
-  值，保持克制）——否则用户无法感知固定状态。
+- 过滤字段从 text 扩展到：**text + 来源 App 名**（大小写不敏感 contains）。
+- 实现从内存 filter 改为 SwiftData `#Predicate`（1000 条规模仍轻），
+  保持 @Query 实时刷新语义。
+- 现有搜索交互（输入即过滤、Esc、选中回落任务九逻辑）全部不变。
 
 ### 验收
 
-- A 类：xcodebuild test **73/73** 通过（新增 6：selectionAfterDelete 四例 +
-  deleteItem 选中回落/未选中保持两例；字数统计为主人 0760e1c 已交付）；
-  编译 0 警告（顺带清了 HotKeyServiceTests/PasteServiceTests 两个既有
-  测试告警）；grep 视图层无样式魔数。
-- 实现记录：操作行动作经 PanelModel 回调装配（UI 只做组合）；store.delete
-  /togglePin 均按 id 在自有 context 重取（调用方持 @Query 实例）；每卡
-  预留等高原操作行槽位，选中变化时网格零位移。
-- B 类（人工，待用户验证）：① 面板加高 400pt、未选中卡片行 centerY
-  居中；② 选中卡上移 ~28pt（150ms 缓动）+ 卡下浮现操作图标行；③
-  复制/删除/固定三图标行为正确（复制写回剪贴板不收起面板、删除后选中
-  回落邻卡、固定角标即时出现）；share 禁用 + Coming soon 提示；④ 深浅色/
-  两主题下观感一致；⑤ 键盘导航时图标行跟随；⑥ 与任务十二联动：固定
-  项豁免淘汰。
+- A 类：全量测试通过（新增：设置读写 round-trip、排除列表变化生效、
+  predicate 搜索命中 text/来源 App）；Debug 0 error 0 警告；无魔数。
+- B 类（人工，待用户验证）：⌘, 打开设置；改历史上限/保留时长生效；
+  从运行中 App 选取排除后该 App 复制不入库；清空历史后面板为空；
+  搜索来源 App 名可命中；三处设置重启后保持。

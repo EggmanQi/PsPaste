@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 /// Bottom history panel content (UI.md §2). Hosted inside `PanelController`'s NSPanel.
@@ -6,23 +5,11 @@ struct HistoryPanelView: View {
     @Bindable var model: PanelModel
     let store: ClipboardStore
 
-    @Query(sort: \ClipboardItem.createdAt, order: .reverse) private var allItems: [ClipboardItem]
     @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(ThemeManager.self) private var themeManager
 
     private var theme: any Theme { themeManager.current }
-
-    /// Text-field filtering (simple search; full search is M2).
-    private var items: [ClipboardItem] {
-        let term = model.searchText.trimmingCharacters(in: .whitespaces)
-        guard !term.isEmpty else { return allItems }
-        return allItems.filter { $0.text?.localizedCaseInsensitiveContains(term) == true }
-    }
-
-    private var effectiveSelectedID: UUID? {
-        model.effectiveSelection(in: items)?.id
-    }
 
     var body: some View {
         VStack(spacing: Metrics.Panel.sectionSpacing) {
@@ -42,11 +29,6 @@ struct HistoryPanelView: View {
         )
         .contentShape(Rectangle())
         .onKeyPress { press in pressHandler(press) }
-        .onChange(of: model.searchText, initial: false) { _, _ in
-            // Filter results keep a valid selection, else land on the first
-            // match, so typing never leaves Return without a target (§2.3).
-            model.updateSelectionAfterFilter(in: items)
-        }
         .overlay(alignment: .top) {
             if model.showsManualPasteHint {
                 Text("Copied — press ⌘V to paste")
@@ -118,7 +100,7 @@ struct HistoryPanelView: View {
                 TextField("Search clipboard history", text: $model.searchText)
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
-                    .onSubmit { model.confirmSelection(in: items) }
+                    .onSubmit { model.confirmSelection(in: model.filteredItems) }
             }
         }
         .padding(.horizontal, Metrics.SearchSlot.horizontalPadding)
@@ -134,99 +116,39 @@ struct HistoryPanelView: View {
         }
     }
 
+    /// The query-owning strip. A `Predicate` is bound to its `Query` at
+    /// creation time, so the search identity re-creates the strip on every
+    /// real term change and the new `@Query` runs the predicate in the store
+    /// (Task 14-C); whitespace-only edits keep their identity (and query).
     private var historyArea: some View {
-        ScrollViewReader { proxy in
-            // Top-aligned row: the per-item insets below reserve the selection
-            // lift plus the divider margin above and a bottom-edge margin below,
-            // so the lifted card and its action row never touch the panel edges.
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: Metrics.Card.spacing) {
-                    ForEach(items, id: \.id) { item in
-                        let selected = item.id == effectiveSelectedID
-                        VStack(spacing: Metrics.Card.actionRowSpacing) {
-                            CardView(
-                                item: item,
-                                isSelected: selected,
-                                store: store,
-                                onSelect: { model.selectViaMouse(item.id) },
-                                onConfirm: { model.confirmSelection(in: items) }
-                            )
-                            // The selected card rises and reveals its action
-                            // row; every card reserves the slot so the grid
-                            // never moves when selection changes (§2.2 v5).
-                            .offset(y: selected ? -Metrics.Card.selectionLift : 0)
-
-                            CardActionRow(
-                                item: item,
-                                onCopy: { model.requestCopy(of: item) },
-                                onDelete: { model.deleteItem(item, in: items) },
-                                onTogglePin: { model.togglePin(of: item) }
-                            )
-                            .frame(height: Metrics.Card.actionRowHeight)
-                            .opacity(selected ? 1 : 0)
-                            .allowsHitTesting(selected)
-                        }
-                        .padding(.top, Metrics.Card.topInset)
-                        .padding(.bottom, Metrics.Card.bottomInset)
-                        .animation(
-                            .easeOut(duration: Metrics.Card.selectionLiftDuration),
-                            value: selected
-                        )
-                        .id(item.id)
-                    }
-                }
-                .padding(.horizontal, Metrics.Card.spacing)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-            .overlay {
-                if items.isEmpty {
-                    emptyState
-                }
-            }
-            .onChange(of: effectiveSelectedID, initial: false) { _, newValue in
-                guard let newValue else { return }
-                let source = model.selectionChangeSource
-                // A clicked card is on screen by definition; gating the scroll
-                // here removes the animated scrollTo that felt like click lag (Task 6-A).
-                guard PanelModel.shouldScrollToSelection(
-                    source: source,
-                    isTargetVisible: source == .mouseClick
-                ) else { return }
-                withAnimation(Metrics.Panel.animation) {
-                    proxy.scrollTo(newValue)
-                }
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: Metrics.EmptyState.spacing) {
-            Text("Copy something to get started")
-                .font(theme.emptyStateTitleFont)
-            Text("Press ⌘⇧` anywhere to open this panel")
-                .font(theme.emptyStateSubtitleFont)
-                .foregroundStyle(theme.secondaryText(colorScheme))
-        }
+        HistoryItemsView(model: model, store: store, searchText: model.searchText)
+            .id(HistoryItemsView.searchKey(for: model.searchText))
     }
 
     /// Panel-level keys (UI.md §2.3); typing falls through to the search field.
+    /// Item-dependent actions read `model.filteredItems`, the mirror the strip
+    /// maintains, because this view no longer owns the query.
     private func pressHandler(_ press: KeyPress) -> KeyPress.Result {
         switch press.key {
         case .escape:
             model.handleEscape()
             return .handled
         case .leftArrow:
-            model.moveSelection(in: items, direction: .newer)
+            model.moveSelection(in: model.filteredItems, direction: .newer)
             return .handled
         case .rightArrow:
-            model.moveSelection(in: items, direction: .older)
+            model.moveSelection(in: model.filteredItems, direction: .older)
             return .handled
         case .return:
-            model.confirmSelection(in: items)
+            model.confirmSelection(in: model.filteredItems)
             return .handled
         default:
             if press.key == "f", press.modifiers.contains(.command) {
                 model.searchExpanded = true
+                return .handled
+            }
+            if press.key == ",", press.modifiers.contains(.command) {
+                model.onOpenSettings?()
                 return .handled
             }
             // Type-to-search (UI.md §2.3): printable characters expand the slot

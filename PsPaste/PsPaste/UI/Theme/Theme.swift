@@ -144,6 +144,21 @@ enum Metrics {
     enum EmptyState {
         static let spacing: CGFloat = 6
     }
+
+    /// Settings window layout (UI.md §4, Task 14). Window geometry itself
+    /// lives in `SettingsWindowController` (Settings module, which UI may
+    /// not depend on); these are the content metrics used by the tabs.
+    enum Settings {
+        static let minContentWidth: CGFloat = 520
+        static let minContentHeight: CGFloat = 420
+        static let formPadding: CGFloat = 16
+        static let excludedListMinHeight: CGFloat = 120
+        static let rowIconSize: CGFloat = 24
+        static let rowIconSpacing: CGFloat = 10
+        static let rowVerticalPadding: CGFloat = 4
+        static let pickerWidth: CGFloat = 420
+        static let pickerHeight: CGFloat = 320
+    }
 }
 
 extension Color {

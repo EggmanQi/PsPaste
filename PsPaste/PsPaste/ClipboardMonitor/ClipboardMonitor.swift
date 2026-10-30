@@ -31,6 +31,8 @@ struct ClipboardSnapshot {
     var contentTypes: [String]
     /// Plain text representation (searchable); falls back to URL for link-only copies.
     var text: String?
+    /// Display name of the source app at capture time, denormalized for search.
+    var sourceAppName: String? = nil
     /// Large representations (rtf/html/image) to persist on disk instead of the DB.
     var payloads: [(type: String, data: Data)]
     /// SHA-256 over all captured representations, for dedup.
@@ -73,8 +75,16 @@ final class ClipboardMonitor {
     /// Wired to storage by the app; returns true when the change must not be recorded.
     var shouldSkipCapture: ((ClipboardSnapshot) -> Bool)?
 
-    /// Source apps whose copies are ignored. Settings UI arrives in M2 (F9).
+    /// Source apps whose copies are ignored. Managed through `AppSettings`
+    /// (Privacy tab); the list applies from the next poll cycle on (Task 14-B).
     var excludedBundleIDs: Set<String> = []
+
+    /// The frontmost app as (bundle id, display name). Replaceable in tests;
+    /// production reads `NSWorkspace` at poll time.
+    var frontmostAppInfo: () -> (bundleID: String?, name: String?) = {
+        let app = NSWorkspace.shared.frontmostApplication
+        return (app?.bundleIdentifier, app?.localizedName)
+    }
 
     private(set) var isPaused = false
 
@@ -138,8 +148,8 @@ final class ClipboardMonitor {
             return
         }
 
-        let sourceApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        if let sourceApp, excludedBundleIDs.contains(sourceApp) { return }
+        let sourceApp = frontmostAppInfo()
+        if let bundleID = sourceApp.bundleID, excludedBundleIDs.contains(bundleID) { return }
 
         guard let snapshot = makeSnapshot(from: pasteboard, sourceApp: sourceApp) else { return }
         guard shouldSkipCapture?(snapshot) != true else { return }
@@ -148,7 +158,7 @@ final class ClipboardMonitor {
 
     private func makeSnapshot(
         from pasteboard: any PasteboardReading,
-        sourceApp: String?
+        sourceApp: (bundleID: String?, name: String?)
     ) -> ClipboardSnapshot? {
         var contentTypes: Set<String> = []
         var plainParts: [String] = []
@@ -185,9 +195,10 @@ final class ClipboardMonitor {
         return ClipboardSnapshot(
             contentTypes: Self.capturedTypes.map(\.rawValue).filter(contentTypes.contains),
             text: text,
+            sourceAppName: sourceApp.name,
             payloads: payloads,
             contentHash: hasher.finalize().map { String(format: "%02x", $0) }.joined(),
-            sourceAppBundleID: sourceApp
+            sourceAppBundleID: sourceApp.bundleID
         )
     }
 

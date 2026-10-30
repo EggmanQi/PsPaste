@@ -14,13 +14,17 @@ final class ClipboardStore {
     private let payloadsRoot: URL
 
     /// Oldest unpinned records beyond this count are deleted (F2, default 1000).
+    /// Wired to `AppSettings` at launch and on change (Task 14).
     var historyLimit = 1000
+
+    /// Records idle longer than this are removed by the periodic sweep.
+    /// Wired to `AppSettings.retentionDays` at launch and on change (Task 14);
+    /// the default preserves the previous fixed 30-day policy.
+    var staleTTL: TimeInterval = Double(AppSettings.Limit.defaultRetentionDays) * 24 * 60 * 60
 
     /// Eviction policy (ARCHITECTURE §3, 2026-10-29 LRU revision): survival
     /// is by last activity, pinned records are exempt from both rules.
     enum Eviction {
-        /// Records idle longer than this are removed by the periodic sweep.
-        static let staleTTL: TimeInterval = 30 * 24 * 60 * 60
         /// How often the periodic sweep runs (plus once at launch).
         static let scanInterval: TimeInterval = 24 * 60 * 60
     }
@@ -62,6 +66,7 @@ final class ClipboardStore {
         let item = ClipboardItem(
             id: itemID,
             sourceAppBundleID: snapshot.sourceAppBundleID,
+            sourceAppName: snapshot.sourceAppName,
             sourceDevice: Self.deviceName,
             contentTypes: snapshot.contentTypes,
             text: snapshot.text,
@@ -170,14 +175,15 @@ final class ClipboardStore {
 
     /// Periodic eviction (ARCHITECTURE §3 rule 2): unpinned records whose
     /// last activity is older than the TTL are deleted. `now` is injectable
-    /// for tests; the timer fires this with the wall clock.
+    /// for tests; the timer fires this with the wall clock. The TTL itself
+    /// is the instance property, wired to `AppSettings` (Task 14).
     func evictStale(now: Date = Date()) {
         let descriptor = FetchDescriptor<ClipboardItem>()
         guard let all = try? context.fetch(descriptor) else { return }
         for item in all where !item.isPinned && Self.shouldEvict(
             lastActivityAt: item.lastActivityAt,
             now: now,
-            ttl: Eviction.staleTTL
+            ttl: staleTTL
         ) {
             delete(item)
         }
@@ -220,5 +226,27 @@ final class ClipboardStore {
             delete(item)
             excess -= 1
         }
+    }
+
+    /// Applies the capacity rule immediately (Settings ▸ General lowers the
+    /// limit, Task 14) instead of waiting for the next capture to prune.
+    func enforceHistoryLimit() {
+        pruneIfNeeded()
+    }
+
+    /// Deletes every record and its payload files (Settings ▸ Privacy,
+    /// Task 14). One save for the whole batch.
+    func clearAll() {
+        let descriptor = FetchDescriptor<ClipboardItem>()
+        guard let all = try? context.fetch(descriptor) else { return }
+        for item in all {
+            if let payloadPath = item.payloadPath {
+                try? FileManager.default.removeItem(
+                    at: payloadsRoot.appendingPathComponent(payloadPath, isDirectory: true)
+                )
+            }
+            context.delete(item)
+        }
+        try? context.save()
     }
 }

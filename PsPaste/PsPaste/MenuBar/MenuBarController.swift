@@ -8,6 +8,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let monitor: ClipboardMonitor
     private let togglePanel: () -> Void
     private let openDebugWindow: () -> Void
+    private let openSettings: () -> Void
 
     private let pauseItem = NSMenuItem()
     private let permissionItem = NSMenuItem()
@@ -29,11 +30,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     init(
         monitor: ClipboardMonitor,
         togglePanel: @escaping () -> Void,
-        openDebugWindow: @escaping () -> Void
+        openDebugWindow: @escaping () -> Void,
+        openSettings: @escaping () -> Void
     ) {
         self.monitor = monitor
         self.togglePanel = togglePanel
         self.openDebugWindow = openDebugWindow
+        self.openSettings = openSettings
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -82,8 +85,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         )
         debugItem.target = self
 
-        let settingsItem = NSMenuItem(title: "Settings…", action: nil, keyEquivalent: ",")
-        settingsItem.isEnabled = false
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(openSettingsWindow),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
 
         let quitItem = NSMenuItem(
             title: "Quit P's Paste",
@@ -158,6 +165,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func openDebug() {
         openDebugWindow()
+    }
+
+    @objc private func openSettingsWindow() {
+        openSettings()
     }
 
     @objc private func quit() {

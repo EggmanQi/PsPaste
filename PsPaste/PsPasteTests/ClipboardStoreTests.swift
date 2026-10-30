@@ -199,6 +199,44 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(touched?.lastActivityAt, touched?.lastUsedAt)
     }
 
+    // MARK: - Task 14: settings-driven eviction + clear all
+
+    func testEnforceHistoryLimitPrunesImmediatelyOnLoweredLimit() {
+        store.save(snapshot(text: "a"))
+        store.save(snapshot(text: "b"))
+        store.save(snapshot(text: "c"))
+
+        store.historyLimit = 1
+        store.enforceHistoryLimit()
+
+        // Newest survives; no new capture needed to apply the setting.
+        XCTAssertEqual(allItems(in: store.modelContainer).map(\.text), ["c"])
+    }
+
+    func testStaleSweepUsesAdjustableTTL() {
+        let now = Date()
+        insertItem(text: "ten days old", createdAt: now.addingTimeInterval(-10 * day))
+        insertItem(text: "fresh", createdAt: now)
+
+        // Settings shortens retention to 7 days: the 10-day record must go.
+        store.staleTTL = 7 * day
+        store.evictStale(now: now)
+
+        XCTAssertEqual(allItems(in: store.modelContainer).map(\.text), ["fresh"])
+    }
+
+    func testClearAllRemovesRecordsAndPayloadDirectories() throws {
+        store.save(snapshot(text: "with payload", payloads: [("public.png", imageData())]))
+        store.save(snapshot(text: "plain"))
+        let payloadID = try XCTUnwrap(payloadDirectoryName(forText: "with payload"))
+
+        store.clearAll()
+
+        XCTAssertTrue(allItems(in: store.modelContainer).isEmpty)
+        let directory = payloadsRoot.appendingPathComponent(payloadID, isDirectory: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
+
     private func payloadDirectoryName(forText text: String) throws -> String? {
         let item = allItems(in: store.modelContainer).first { $0.text == text }
         return item?.payloadPath

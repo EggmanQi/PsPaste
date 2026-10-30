@@ -26,9 +26,11 @@
 - [x] 任务十三：面板 v5——加高 + 选中上移 + 操作图标行（2026-10-29 完成，A 类已过；B 类人工验证待确认）
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
-- [ ] 搜索过滤、Pinboard（单收藏夹）
-- [ ] 排除应用列表、敏感内容跳过、暂停捕获
-- [ ] 设置窗口、历史清理策略
+- [x] 任务十四：设置窗口 v1 + 排除应用管理 + 搜索增强（2026-10-30 完成，A 类已过；B 类人工验证待确认）
+- [x] 搜索过滤（任务十四完整版：text + 来源 App 名，`#Predicate`）
+- [ ] Pinboard（单收藏夹）
+- [x] 排除应用列表（任务十四）、敏感内容跳过（任务二）、暂停捕获（任务三）
+- [x] 设置窗口 v1（任务十四）、历史清理策略（任务十二 + 任务十四可调）
 - [ ] iCloud（CloudKit 私有容器）同步 + 同步状态展示
 - [ ] 按 PRD §6 用户故事逐条验收
 
@@ -201,3 +203,47 @@
   新增 6 个单测，xcodebuild test 73/73 通过、编译 0 警告（顺带清理两个
   既有测试告警）。B 类待人工：400pt 观感、上移+操作行、三图标行为、
   深浅色/两主题一致性、固定项豁免联动。
+- 2026-10-30：任务十四完成（设置窗口 v1 + 排除应用管理 + 搜索增强）。
+  ①设置窗口：`SettingsWindowController`（NSWindowController + SwiftUI
+  TabView，与 DebugWindowController 同构，不引入 SwiftUI Scene，不动
+  LSUIElement）；Tab 仅 通用/隐私/关于（同步 Tab 按任务单选「不出现」，
+  避免死 Tab；快捷键修改/开机启动 v1 未做，UI.md §4 已回写）。通用：
+  历史上限 Stepper（1–10,000，即时 enforceHistoryLimit）、保留时长
+  Picker（7/14/30/90/180/365 天）、主题 RadioPicker（复用
+  ThemeManager）。隐私：排除应用列表（图标+名称+Bundle ID，swipe 删除）、
+  从运行中 App 选取（RunningAppPicker，NSWorkspace 枚举 .regular 应用，
+  过滤规则为纯函数可测）、清空历史（确认 alert → store.clearAll 批量删
+  DB + payload 目录）。关于：版本（Bundle 读 MARKETING_VERSION）、辅助
+  功能权限状态 + 授权入口（复用 PasteService）。菜单栏 Settings… 启用
+  （⌘,）；面板 ⌘, 先收起面板再开设置。
+  ②排除链路：AppSettings（@Observable，语义 UserDefaults 键，默认值=
+  现状零迁移）→ didSet 直写 + 变更回调 → 装配接线 monitor/store；
+  ClipboardMonitor.excludedBundleIDs 改由 UserDefaults 列表驱动，下一次
+  轮询即生效（无需重启）；monitor.frontmostAppInfo 可注入，排除行为
+  可测。
+  ③store 可调参数：Eviction.staleTTL 静态常量 → 实例 var（与
+  AppSettings.retentionDays 同源：retentionDays × 86400）；
+  historyLimit 新增 enforceHistoryLimit()（调低立即裁剪，不等下次
+  捕获）。
+  ④搜索增强（UI.md §2.3 完整版）：过滤字段 text → text + 来源 App 名
+  （大小写/声调不敏感）；模型新增 sourceAppName（捕获时随 frontmost
+  应用 denormalize，旧记录为 nil——按 App 名搜不到任务十四之前的记录，
+  B 类注明）；实现从内存 filter 改为 SwiftData #Predicate
+  （ClipboardItem.searchPredicate，单源共享给视图与测试）。关键坑：
+  `?? ""` coalesce 会被 SQL 生成层拒绝（TERNARY bad RHS），必须
+  强制解包（nil 行在 SQL NULL 语义下自然不命中）。@Query 的 predicate
+  创建后不可变 → HistoryItemsView 按 trim 后搜索词 .id 重建 Query
+  （每击键一次，LazyHStack 懒渲染代价可忽略），其余 DB 变化仍走原
+  Query 实时刷新；选中回落逻辑移入该视图，以 searchExpanded 为门
+  保住任务九「无选中唤出」语义；PanelModel.filteredItems 镜像供
+  面板级按键处理（HistoryPanelView 不再持有查询）。
+  版本号 1.0 → 1.1.0（重要功能，MARKETING_VERSION ×4）。
+  新增 18 个单测（AppSettings 读写 round-trip/默认值/回调、
+  SettingsHelpers、ItemSearch predicate 命中 text/来源 App/大小写、
+  monitor 排除即时生效 + sourceAppName 入快照、store enforceHistoryLimit/
+  可调 TTL 清扫/clearAll 含 payload 清理），xcodebuild test 91/91
+  通过、编译 0 error 0 警告。ARCHITECTURE §2/§3/§4、UI.md §2.3/§4
+  已回写。B 类待人工：⌘, 打开设置、改历史上限/保留时长生效、从运行中
+  App 选取排除后该 App 复制不入库、清空历史后面板为空、搜索来源 App
+  名可命中、三处设置重启后保持、设置窗口观感（含设置内切换主题后面板
+  即时换肤）。

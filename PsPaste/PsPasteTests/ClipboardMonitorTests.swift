@@ -149,4 +149,33 @@ final class ClipboardMonitorTests: XCTestCase {
 
         XCTAssertTrue(captured.isEmpty)
     }
+
+    // MARK: - Task 14: excluded apps + source app name
+
+    func testCopyFromExcludedAppIsSkippedAndAppliesImmediately() {
+        monitor.frontmostAppInfo = { ("com.example.secret", "Secret") }
+        monitor.excludedBundleIDs = ["com.example.secret"]
+        copyText("classified")
+        XCTAssertTrue(captured.isEmpty)
+
+        // Removing the app from the exclusion list takes effect on the next
+        // poll cycle — no monitor restart (Task 14-B).
+        monitor.excludedBundleIDs = []
+        copyText("declassified")
+        XCTAssertEqual(captured.map(\.text), ["declassified"])
+    }
+
+    func testCopyFromNonExcludedAppIsCaptured() {
+        monitor.frontmostAppInfo = { ("com.example.plain", "Plain") }
+        monitor.excludedBundleIDs = ["com.example.secret"]
+        copyText("ordinary")
+        XCTAssertEqual(captured.map(\.text), ["ordinary"])
+    }
+
+    func testSnapshotCarriesSourceAppName() {
+        monitor.frontmostAppInfo = { ("com.example.writer", "Writer") }
+        copyText("draft")
+        XCTAssertEqual(captured.first?.sourceAppBundleID, "com.example.writer")
+        XCTAssertEqual(captured.first?.sourceAppName, "Writer")
+    }
 }

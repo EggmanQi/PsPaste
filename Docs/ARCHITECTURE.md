@@ -34,9 +34,12 @@ PsPaste (app target)
 ├── HotKeyService         # 全局快捷键注册与回调（Carbon RegisterEventHotKey）
 ├── PanelController       # NSPanel 底部面板：唤出/收起、屏幕跟随、焦点策略
 ├── PasteService          # 写回剪贴板 + 辅助功能权限检测 + 模拟 ⌘V
-└── UI (SwiftUI)          # HistoryPanelView / CardView / SettingsView / MenuBarView
-                           # 视觉样式集中在 Theme/ 下（任务十一起：Theme 协议 +
-                           # 双实现 + ThemeManager environment 注入，商业化时可整体替换）
+├── Settings              # AppSettings（UserDefaults 语义键，变更回调即时生效）
+│                         # + SettingsWindowController（NSWindowController + TabView）
+└── UI (SwiftUI)          # HistoryPanelView / HistoryItemsView / CardView /
+                          # SettingsView / MenuBarView
+                          # 视觉样式集中在 Theme/ 下（任务十一起：Theme 协议 +
+                          # 双实现 + ThemeManager environment 注入，商业化时可整体替换）
 ```
 
 依赖方向：`UI → {ClipboardMonitor, Storage, HotKeyService, PanelController, PasteService}`，
@@ -49,6 +52,8 @@ PsPaste (app target)
     var id: UUID
     var createdAt: Date
     var sourceAppBundleID: String?
+    var sourceAppName: String?     // 任务十四：捕获时随 frontmost 应用反规范化，
+                                   // 供 #Predicate 按来源 App 名搜索（旧记录为 nil）
     var sourceDevice: String        // 预留：本机标识，用于未来 iOS 端与去重
     var contentTypes: [String]      // 本次复制的全部 UTI，见 §4
     var text: String?               // 纯文本表示（可搜索）；富文本等原始数据见 payload
@@ -89,10 +94,14 @@ PsPaste (app target)
   存 `contentTypes` 以便粘贴时无损还原。
 - 跳过规则（按顺序）：
   1. 含 `org.nspasteboard.ConcealedType` 或 `TransientType` → 不记录；
-  2. 来源 App 在排除列表 → 不记录；
+  2. 来源 App 在排除列表 → 不记录（任务十四起列表存 UserDefaults 语义键，
+     经 `AppSettings` 变更回调驱动 `ClipboardMonitor.excludedBundleIDs`，
+     下一次轮询即生效，无需重启；设置窗口隐私 Tab 管理）；
   3. 内容 hash 与最新一条相同 → 不重复记录；
   4. 来源是自身（PasteService 写回时打 `org.nspasteboard.TransientType` 或内部标记）→ 不回环记录。
 - 捕获暂停时停止读取（继续轮询 changeCount 但直接跳过）。
+- 来源 App 探测：`NSWorkspace.frontmostApplication`，经可注入的
+  `frontmostAppInfo` 提供（bundle id + 显示名），显示名随快照入库供搜索。
 
 ## 5. 面板与焦点（PanelController）
 

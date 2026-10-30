@@ -24,6 +24,10 @@ final class PanelModel {
     private(set) var selectionChangeSource: SelectionChangeSource = .programmatic
     /// True while the "Copied — press ⌘V to paste" hint is visible (no AX permission).
     var showsManualPasteHint = false
+    /// Mirror of the filtered query results, maintained by `HistoryItemsView`.
+    /// The panel-level key handling (`HistoryPanelView` owns `.onKeyPress`)
+    /// and the search field's submit action read this instead of the query.
+    var filteredItems: [ClipboardItem] = []
 
     /// Wired by the app: marks the write-back as own, restores representations, etc.
     var onRestore: ((ClipboardItem) -> Void)?
@@ -34,6 +38,8 @@ final class PanelModel {
     var onCopyOnly: ((ClipboardItem) -> Void)?
     var onTogglePin: ((ClipboardItem) -> Void)?
     var onDelete: ((ClipboardItem) -> Void)?
+    /// Wired by the app: ⌘, opens the settings window (UI.md §2.3/§4).
+    var onOpenSettings: (() -> Void)?
 
     /// Called by the controller right before the panel is shown.
     func prepareForShow() {

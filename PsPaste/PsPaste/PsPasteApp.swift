@@ -24,7 +24,9 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeyService = HotKeyService()
     private let menuBarController: MenuBarController
     private let debugWindowController: DebugWindowController
+    private let settingsWindowController: SettingsWindowController
     private let notifier = SystemNotifier()
+    private let settings = AppSettings.shared
 
     override init() {
         panelController = PanelController(
@@ -40,11 +42,19 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
             model: panelModel
         )
         debugWindowController = DebugWindowController(store: store)
+        settingsWindowController = SettingsWindowController(
+            settings: settings,
+            themeManager: ThemeManager.shared,
+            store: store
+        )
         menuBarController = MenuBarController(
             monitor: monitor,
             togglePanel: { [panelController] in panelController.toggle() },
             openDebugWindow: { [debugWindowController] in
                 debugWindowController.showDebugWindow()
+            },
+            openSettings: { [settingsWindowController] in
+                settingsWindowController.showSettings()
             }
         )
         super.init()
@@ -65,6 +75,27 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
         }
         panelModel.onTogglePin = { [store] item in store.togglePin(item) }
         panelModel.onDelete = { [store] item in store.delete(item) }
+        // ⌘, from the panel: close it, then bring the settings window up.
+        panelModel.onOpenSettings = { [panelController, settingsWindowController] in
+            panelController.close()
+            settingsWindowController.showSettings()
+        }
+
+        // Settings effective paths (Task 14): apply persisted values now and
+        // forward every later change — no relaunch needed.
+        store.historyLimit = settings.historyLimit
+        store.staleTTL = settings.staleTTL
+        monitor.excludedBundleIDs = Set(settings.excludedBundleIDs)
+        settings.onHistoryLimitChange = { [store] limit in
+            store.historyLimit = limit
+            store.enforceHistoryLimit()
+        }
+        settings.onRetentionChange = { [store] ttl in
+            store.staleTTL = ttl
+        }
+        settings.onExcludedBundleIDsChange = { [monitor] bundleIDs in
+            monitor.excludedBundleIDs = Set(bundleIDs)
+        }
         hotKeyService.onToggle = { [panelController] in panelController.toggle() }
         hotKeyService.onRegistrationStateChange = { [weak self] state in
             guard let self else { return }

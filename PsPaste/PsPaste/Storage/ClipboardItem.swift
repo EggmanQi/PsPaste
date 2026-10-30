@@ -11,6 +11,10 @@ final class ClipboardItem {
     @Attribute(.unique) var id: UUID
     var createdAt: Date
     var sourceAppBundleID: String?
+    /// Display name of the source app at capture time, denormalized so the
+    /// full search can match it with a SwiftData predicate (Task 14-C).
+    /// Nil for records captured before this field existed.
+    var sourceAppName: String?
     /// Local device identifier; reserved for future multi-device dedup (ARCHITECTURE §8).
     var sourceDevice: String
     /// Every UTI captured for this copy, used for lossless paste-back.
@@ -35,6 +39,7 @@ final class ClipboardItem {
         id: UUID = UUID(),
         createdAt: Date = Date(),
         sourceAppBundleID: String? = nil,
+        sourceAppName: String? = nil,
         sourceDevice: String,
         contentTypes: [String],
         text: String?,
@@ -47,6 +52,7 @@ final class ClipboardItem {
         self.id = id
         self.createdAt = createdAt
         self.sourceAppBundleID = sourceAppBundleID
+        self.sourceAppName = sourceAppName
         self.sourceDevice = sourceDevice
         self.contentTypes = contentTypes
         self.text = text
@@ -82,5 +88,19 @@ extension ClipboardItem {
         let headCount = Int((Double(budget) * 0.7).rounded(.down))
         let tailCount = budget - headCount
         return "\(text.prefix(headCount)) … \(text.suffix(tailCount))"
+    }
+
+    /// Full-search predicate (UI.md §2.3, Task 14-C): matches the copied
+    /// text or the source app name, case- and diacritic-insensitive.
+    /// Lives next to the model so the query and the tests share one filter.
+    ///
+    /// Force-unwrapped on purpose: `?? ""` coalescing wraps the column in a
+    /// TERNARY that SwiftData's SQL generator rejects ("bad RHS"), and nil
+    /// records simply never match under SQL NULL semantics.
+    static func searchPredicate(matching term: String) -> Predicate<ClipboardItem> {
+        #Predicate { item in
+            item.text!.localizedStandardContains(term)
+                || item.sourceAppName!.localizedStandardContains(term)
+        }
     }
 }
