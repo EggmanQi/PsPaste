@@ -30,7 +30,7 @@ struct ShortcutRecorder: View {
 
     var body: some View {
         HStack(spacing: Metrics.Settings.recorderSpacing) {
-            Text(isRecording ? "Press new shortcut…" : label(for: current))
+            Text(isRecording ? "Press new shortcut…" : current.displayText)
                 .frame(minWidth: Metrics.Settings.shortcutLabelMinWidth, alignment: .leading)
                 .foregroundStyle(isRecording ? .secondary : .primary)
             Button(isRecording ? "Cancel" : "Record") {
@@ -52,10 +52,6 @@ struct ShortcutRecorder: View {
             }
         }
         .font(.callout)
-    }
-
-    private func label(for binding: HotKeyBinding) -> String {
-        binding.displayString { KeyCodeDisplay.character(forKeyCode: $0) }
     }
 
     private func startRecording() {
@@ -111,48 +107,5 @@ struct ShortcutRecorder: View {
         func dispatch(_ event: NSEvent) {
             onKey?(event)
         }
-    }
-}
-
-/// Key-code → display glyph via the current keyboard layout. Layout- and
-/// locale-dependent, so it stays out of the pure display rule and is only
-/// spot-checked manually.
-enum KeyCodeDisplay {
-
-    /// The character the key produces (e.g. grave → "`"), falling back to
-    /// the raw key code number when the layout cannot be read.
-    static func character(forKeyCode keyCode: UInt32) -> String {
-        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
-              let layoutValue = TISGetInputSourceProperty(
-                  source, kTISPropertyUnicodeKeyLayoutData
-              ) else {
-            return String(keyCode)
-        }
-        let layoutData = layoutValue.assumingMemoryBound(to: CFData.self).pointee as CFData
-        guard let layoutBytes = CFDataGetBytePtr(layoutData) else {
-            return String(keyCode)
-        }
-        var deadKeyState = UInt32(0)
-        var characters = [UniChar](repeating: 0, count: 4)
-        var length = 0
-        let status = layoutBytes.withMemoryRebound(
-            to: UCKeyboardLayout.self,
-            capacity: 1
-        ) { layout in
-            UCKeyTranslate(
-                layout,
-                UInt16(keyCode),
-                UInt16(kUCKeyActionDisplay),
-                0,
-                UInt32(LMGetKbdType()),
-                OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &deadKeyState,
-                characters.count,
-                &length,
-                &characters
-            )
-        }
-        guard status == noErr, length > 0 else { return String(keyCode) }
-        return String(utf16CodeUnits: characters, count: length)
     }
 }

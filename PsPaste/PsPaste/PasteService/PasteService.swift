@@ -19,12 +19,10 @@ enum PasteService {
         trusted ? .directPaste : .copyOnly
     }
 
-    /// Query-only by default: never shows the system authorization prompt here.
-    /// The authorization entry point lives in the menu bar.
-    static func isAccessibilityTrusted(queryOnly: Bool = true) -> Bool {
-        let promptKey: CFString = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
-        let options = [promptKey: queryOnly] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
+    /// Query only: never shows the system authorization prompt. The
+    /// authorization entry points live in the menu bar and the About tab.
+    static func isAccessibilityTrusted() -> Bool {
+        AXIsProcessTrusted()
     }
 
     /// Deep link to the Accessibility pane in System Settings.

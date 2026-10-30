@@ -37,6 +37,8 @@ final class AppSettings {
     var onRetentionChange: ((TimeInterval) -> Void)?
     /// Wired by the assembly: pushes the excluded list to the capture monitor.
     var onExcludedBundleIDsChange: (([String]) -> Void)?
+    /// Wired by the assembly: refreshes the shortcut hints in the menus.
+    var onHotKeyBindingChange: ((HotKeyBinding) -> Void)?
 
     var historyLimit: Int {
         didSet {
@@ -72,6 +74,10 @@ final class AppSettings {
     private(set) var hotkeyKeyCode: UInt32
     private(set) var hotkeyModifiers: UInt32
 
+    var hotKeyBinding: HotKeyBinding {
+        HotKeyBinding(keyCode: hotkeyKeyCode, modifiers: hotkeyModifiers)
+    }
+
     /// Persists a new hot key binding (Task 15). The assembly's applier
     /// registers it first and only calls this on success, so a persisted
     /// binding always matches the live registration.
@@ -80,6 +86,7 @@ final class AppSettings {
         hotkeyModifiers = binding.modifiers
         defaults.set(Int(binding.keyCode), forKey: Key.hotkeyKeyCode)
         defaults.set(Int(binding.modifiers), forKey: Key.hotkeyModifiers)
+        onHotKeyBindingChange?(binding)
     }
 
     private let defaults: UserDefaults

@@ -28,7 +28,7 @@ struct GeneralSettingsTab: View {
                 }
             }
             Section("Shortcut") {
-                ShortcutRecorder(current: currentBinding) { binding in
+                ShortcutRecorder(current: settings.hotKeyBinding) { binding in
                     hotKeyApplier.attempt(binding)
                 }
             }
@@ -56,10 +56,6 @@ struct GeneralSettingsTab: View {
         }
         .formStyle(.grouped)
         .padding(Metrics.Settings.formPadding)
-    }
-
-    private var currentBinding: HotKeyBinding {
-        HotKeyBinding(keyCode: settings.hotkeyKeyCode, modifiers: settings.hotkeyModifiers)
     }
 
     /// SMAppService is the single source of truth (Task 15-A): the binding

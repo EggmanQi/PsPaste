@@ -16,17 +16,17 @@ final class HotKeyService {
     /// Outcome of the most recent registration attempt, exposed to the assembly layer.
     nonisolated enum RegistrationState: Equatable {
         case registered
-        case failed(String)
+        /// The binding is owned by another app; a retry is scheduled.
+        case failed(HotKeyBinding)
     }
 
     /// Fired on the main actor when the hot key is pressed.
     var onToggle: (() -> Void)?
 
     /// Fired whenever registration succeeds or fails, including after retries.
+    /// A rejected `rebind` attempt is not a state change: the caller gets
+    /// `false` and the active binding stays as it was.
     var onRegistrationStateChange: ((RegistrationState) -> Void)?
-
-    /// Human-readable failure reason of the most recent attempt.
-    private(set) var lastError: String?
 
     /// Pure retry gate: enough time must pass after the recorded failure.
     nonisolated static func shouldRetry(
@@ -49,6 +49,16 @@ final class HotKeyService {
         return carbon
     }
 
+    /// Carbon modifier mask → NSEvent modifier flags (menu key equivalents).
+    nonisolated static func modifierFlags(fromCarbon carbon: UInt32) -> NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if carbon & UInt32(controlKey) != 0 { flags.insert(.control) }
+        if carbon & UInt32(optionKey) != 0 { flags.insert(.option) }
+        if carbon & UInt32(shiftKey) != 0 { flags.insert(.shift) }
+        if carbon & UInt32(cmdKey) != 0 { flags.insert(.command) }
+        return flags
+    }
+
     // Carbon artifacts are process-wide singletons in practice (only one
     // registration can own a hot key) and the C event handler cannot capture
     // instance state, so they live in static storage.
@@ -64,8 +74,7 @@ final class HotKeyService {
 
     private var retryTimer: Timer?
     private var lastFailureAt: Date?
-    private var lastKeyCode = HotKeyService.defaultKeyCode
-    private var lastModifiers = HotKeyService.defaultModifiers
+    private var binding = HotKeyBinding.default
 
     init(
         now: @escaping () -> Date = Date.init,
@@ -82,23 +91,28 @@ final class HotKeyService {
         keyCode: UInt32 = HotKeyService.defaultKeyCode,
         modifiers: UInt32 = HotKeyService.defaultModifiers
     ) -> Bool {
-        lastKeyCode = keyCode
-        lastModifiers = modifiers
-        retryTimer?.invalidate()
-        retryTimer = nil
+        binding = HotKeyBinding(keyCode: keyCode, modifiers: modifiers)
         Self.pendingToggle = { [weak self] in self?.onToggle?() }
+        return register()
+    }
 
-        guard registerWithCarbon(keyCode, modifiers) else {
-            lastError = "RegisterEventHotKey failed: hot key already owned by another app"
-            onRegistrationStateChange?(.failed(lastError!))
+    /// Registers the active binding and publishes the outcome.
+    @discardableResult
+    private func register() -> Bool {
+        guard registerWithCarbon(binding.keyCode, binding.modifiers) else {
+            onRegistrationStateChange?(.failed(binding))
             scheduleRetry()
             return false
         }
+        didRegister()
+        return true
+    }
 
-        lastError = nil
+    private func didRegister() {
+        retryTimer?.invalidate()
+        retryTimer = nil
         lastFailureAt = nil
         onRegistrationStateChange?(.registered)
-        return true
     }
 
     func stop() {
@@ -108,17 +122,17 @@ final class HotKeyService {
         Self.pendingToggle = nil
     }
 
-    /// Attempts a new binding at runtime (Task 15). Registration failure
-    /// releases the old binding first, so a conflicting hot key would
-    /// otherwise leave the app without any — restore the previous binding
-    /// and report the failure.
+    /// Attempts a new binding at runtime (Task 15). A Carbon attempt releases
+    /// the old registration first, so a conflicting candidate would leave
+    /// the app without any hot key — re-register the active binding.
     @discardableResult
-    func rebind(to binding: HotKeyBinding) -> Bool {
-        let previous = HotKeyBinding(keyCode: lastKeyCode, modifiers: lastModifiers)
-        guard start(keyCode: binding.keyCode, modifiers: binding.modifiers) else {
-            start(keyCode: previous.keyCode, modifiers: previous.modifiers)
+    func rebind(to candidate: HotKeyBinding) -> Bool {
+        guard registerWithCarbon(candidate.keyCode, candidate.modifiers) else {
+            register()
             return false
         }
+        binding = candidate
+        didRegister()
         return true
     }
 
@@ -132,12 +146,13 @@ final class HotKeyService {
             now: current,
             interval: retryInterval
         ) else { return }
-        start(keyCode: lastKeyCode, modifiers: lastModifiers)
+        register()
     }
 
     // MARK: - Retry scheduling
 
     private func scheduleRetry() {
+        retryTimer?.invalidate()
         lastFailureAt = now()
         retryTimer = Timer.scheduledTimer(
             withTimeInterval: retryInterval,

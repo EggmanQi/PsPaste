@@ -10,12 +10,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let openDebugWindow: () -> Void
     private let openSettings: () -> Void
 
+    private let openItem = NSMenuItem()
     private let pauseItem = NSMenuItem()
     private let permissionItem = NSMenuItem()
     private let conflictItem = NSMenuItem()
 
-    /// Non-nil while the panel hot key registration is failing (Task 4).
-    private var hotKeyConflict: String?
+    /// The binding whose registration is failing (Task 4); nil when registered.
+    private(set) var hotKeyConflict: HotKeyBinding?
 
     /// The custom art icon (Resources/icon.png in the bundle). Colored artwork,
     /// so NOT a template image — macOS would flatten it to a black silhouette.
@@ -58,23 +59,18 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func buildMenu() {
         guard let menu = statusItem.menu else { return }
 
-        conflictItem.title = "Hotkey in use by another app"
         conflictItem.isEnabled = false
         conflictItem.isHidden = true
         menu.addItem(conflictItem)
 
-        let openItem = NSMenuItem(
-            title: "Open P's Paste",
-            action: #selector(openPanel),
-            keyEquivalent: "`"
-        )
-        openItem.keyEquivalentModifierMask = [.command, .shift]
+        openItem.title = "Open P's Paste"
         openItem.target = self
+        openItem.action = #selector(openPanel)
+        openItem.setKeyEquivalent(for: .default)
 
         pauseItem.target = self
         pauseItem.action = #selector(togglePause)
 
-        permissionItem.title = "Grant Accessibility Permission…"
         permissionItem.target = self
         permissionItem.action = #selector(openAccessibilitySettings)
 
@@ -113,14 +109,32 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// Refresh dynamic state every time the menu opens.
     func menuNeedsUpdate(_ menu: NSMenu) {
         pauseItem.title = monitor.isPaused ? "Resume Capture" : "Pause Capture"
-        permissionItem.isHidden = PasteService.isAccessibilityTrusted()
+        refreshPermissionItem()
         conflictItem.isHidden = hotKeyConflict == nil
         refreshStatusIcon()
     }
 
+    /// Granted: a checked, inert status line. Not granted: the entry point.
+    private func refreshPermissionItem() {
+        let trusted = PasteService.isAccessibilityTrusted()
+        permissionItem.title = trusted
+            ? "Accessibility Permission Granted"
+            : "Grant Accessibility Permission…"
+        permissionItem.state = trusted ? .on : .off
+        permissionItem.isEnabled = !trusted
+    }
+
+    /// Keeps the "Open" shortcut hint in sync with the live hot key.
+    func setHotKeyBinding(_ binding: HotKeyBinding) {
+        openItem.setKeyEquivalent(for: binding)
+    }
+
     /// Called by the assembly when hot key registration fails (nil = recovered).
-    func setHotKeyConflict(_ error: String?) {
-        hotKeyConflict = error
+    func setHotKeyConflict(_ binding: HotKeyBinding?) {
+        hotKeyConflict = binding
+        if let binding {
+            conflictItem.title = "Shortcut \(binding.displayText) is in use by another app"
+        }
         refreshStatusIcon()
     }
 

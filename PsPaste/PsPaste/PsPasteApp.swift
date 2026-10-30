@@ -27,6 +27,11 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
     private let settingsWindowController: SettingsWindowController
     private let notifier = SystemNotifier()
     private let settings = AppSettings.shared
+    private let appMenuOpenItem = NSMenuItem(
+        title: "Open P's Paste",
+        action: #selector(togglePanelFromMenu),
+        keyEquivalent: ""
+    )
 
     override init() {
         panelController = PanelController(
@@ -104,17 +109,24 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
         settings.onExcludedBundleIDsChange = { [monitor] bundleIDs in
             monitor.excludedBundleIDs = Set(bundleIDs)
         }
+        settings.onHotKeyBindingChange = { [weak self] binding in
+            self?.applyShortcutHints(binding)
+        }
         hotKeyService.onToggle = { [panelController] in panelController.toggle() }
         hotKeyService.onRegistrationStateChange = { [weak self] state in
             guard let self else { return }
             switch state {
             case .registered:
                 self.menuBarController.setHotKeyConflict(nil)
-            case .failed(let error):
-                self.menuBarController.setHotKeyConflict(error)
+            case .failed(let binding):
+                // Retries re-report the same failure every 30 seconds;
+                // notify once per conflict, the menu bar icon stays on.
+                let isNewConflict = self.menuBarController.hotKeyConflict != binding
+                self.menuBarController.setHotKeyConflict(binding)
+                guard isNewConflict else { return }
                 self.notifier.deliver(
                     title: "P's Paste",
-                    body: "Shortcut ⌘⇧` is in use by another app, so the panel hotkey is unavailable. Retrying every 30 seconds."
+                    body: "Shortcut \(binding.displayText) is in use by another app, so the panel hotkey is unavailable. Retrying every 30 seconds."
                 )
             }
         }
@@ -122,6 +134,7 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
+        applyShortcutHints(settings.hotKeyBinding)
         monitor.start()
         // The persisted binding decides the hot key (Task 15); absent keys
         // fall back to the default ⌘⇧` inside AppSettings.
@@ -166,13 +179,44 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Minimal main menu
 
+    private func applyShortcutHints(_ binding: HotKeyBinding) {
+        appMenuOpenItem.setKeyEquivalent(for: binding)
+        menuBarController.setHotKeyBinding(binding)
+    }
+
+    @objc private func togglePanelFromMenu() {
+        panelController.toggle()
+    }
+
+    @objc private func openSettingsWindow() {
+        settingsWindowController.showSettings()
+    }
+
     /// LSUIElement apps get no default menu; provide just enough for the search
     /// field's standard key equivalents (Copy/Paste/Select All) and window controls.
+    /// The app menu shows while one of our windows is active, so it repeats
+    /// the status menu's main entries (Settings ⌘, included).
     private func installMainMenu() {
         let mainMenu = NSMenu()
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        appMenu.addItem(
+            withTitle: "About P's Paste",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(.separator())
+        appMenuOpenItem.target = self
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(openSettingsWindow),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        appMenu.addItem(appMenuOpenItem)
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: "Quit P's Paste",
             action: #selector(NSApplication.terminate(_:)),

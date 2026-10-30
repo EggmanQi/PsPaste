@@ -81,5 +81,17 @@ final class AppSettingsTests: XCTestCase {
         let reloaded = AppSettings(defaults: defaults)
         XCTAssertEqual(reloaded.hotkeyKeyCode, binding.keyCode)
         XCTAssertEqual(reloaded.hotkeyModifiers, binding.modifiers)
+        XCTAssertEqual(reloaded.hotKeyBinding, binding)
+    }
+
+    func testHotKeyBindingChangeCallbackFiresWithNewBinding() {
+        let settings = AppSettings(defaults: defaults)
+        var received: HotKeyBinding?
+        settings.onHotKeyBindingChange = { received = $0 }
+        let binding = HotKeyBinding(keyCode: 0x09, modifiers: 0x0A00)
+
+        settings.setHotKeyBinding(binding)
+
+        XCTAssertEqual(received, binding)
     }
 }

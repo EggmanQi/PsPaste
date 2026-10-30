@@ -32,11 +32,7 @@ final class HotKeyServiceTests: XCTestCase {
         XCTAssertFalse(service.start())
         XCTAssertEqual(calls(), 1)
         XCTAssertEqual(states.count, 1)
-        guard case .failed(let error) = states[0] else {
-            return XCTFail("expected .failed, got \(states[0])")
-        }
-        XCTAssertFalse(error.isEmpty)
-        XCTAssertNotNil(service.lastError)
+        XCTAssertEqual(states[0], .failed(.default))
 
         // Immediate retry is gated by the interval: no second attempt yet.
         service.retryIfNeeded()
@@ -49,7 +45,6 @@ final class HotKeyServiceTests: XCTestCase {
         XCTAssertEqual(calls(), 2)
         XCTAssertEqual(states.count, 2)
         XCTAssertEqual(states[1], .registered)
-        XCTAssertNil(service.lastError)
     }
 
     func testRepeatedFailureKeepsRetrying() {
@@ -134,6 +129,8 @@ final class HotKeyServiceTests: XCTestCase {
                 return scripted.removeFirst()
             }
         )
+        var states: [HotKeyService.RegistrationState] = []
+        service.onRegistrationStateChange = { states.append($0) }
         _ = service.start()
 
         let next = HotKeyBinding(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey))
@@ -144,6 +141,42 @@ final class HotKeyServiceTests: XCTestCase {
         XCTAssertEqual(attempts.count, 3)
         XCTAssertEqual(attempts[2].0, HotKeyService.defaultKeyCode)
         XCTAssertEqual(attempts[2].1, HotKeyService.defaultModifiers)
+        // The rejected candidate is reported to the caller only, never as a
+        // registration failure (no notification for a key the user just tried).
+        XCTAssertEqual(states, [.registered, .registered])
+    }
+
+    func testRebindFailureWhileConflictedReportsActiveBinding() {
+        var scripted = [false, false, false]
+        let service = HotKeyService(registerWithCarbon: { _, _ in scripted.removeFirst() })
+        var states: [HotKeyService.RegistrationState] = []
+        service.onRegistrationStateChange = { states.append($0) }
+        _ = service.start()
+
+        let next = HotKeyBinding(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey))
+        XCTAssertFalse(service.rebind(to: next))
+
+        XCTAssertEqual(states, [.failed(.default), .failed(.default)])
+    }
+
+    func testRebindSuccessAfterConflictStopsRetrying() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var callCount = 0
+        var scripted = [false, true]
+        let service = HotKeyService(
+            now: { start },
+            registerWithCarbon: { _, _ in
+                callCount += 1
+                return scripted.isEmpty ? true : scripted.removeFirst()
+            }
+        )
+        _ = service.start()
+
+        let next = HotKeyBinding(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey))
+        XCTAssertTrue(service.rebind(to: next))
+        service.retryIfNeeded(now: start.addingTimeInterval(60))
+
+        XCTAssertEqual(callCount, 2)
     }
 
     func testCarbonModifiersMapsCocoaFlagsToCarbonMask() {
@@ -156,5 +189,18 @@ final class HotKeyServiceTests: XCTestCase {
             UInt32(controlKey | optionKey)
         )
         XCTAssertEqual(HotKeyService.carbonModifiers(from: []), 0)
+    }
+
+    func testModifierFlagsRoundTripsCarbonMask() {
+        let all: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
+        XCTAssertEqual(
+            HotKeyService.modifierFlags(fromCarbon: HotKeyService.carbonModifiers(from: all)),
+            all
+        )
+        XCTAssertEqual(
+            HotKeyService.modifierFlags(fromCarbon: HotKeyService.defaultModifiers),
+            [.command, .shift]
+        )
+        XCTAssertEqual(HotKeyService.modifierFlags(fromCarbon: 0), [])
     }
 }

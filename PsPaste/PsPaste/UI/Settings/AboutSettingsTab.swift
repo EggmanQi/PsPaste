@@ -25,6 +25,10 @@ struct AboutSettingsTab: View {
                     value: isAccessibilityTrusted ? "Granted" : "Not granted"
                 )
                 .foregroundStyle(isAccessibilityTrusted ? .secondary : .primary)
+                if isAccessibilityTrusted {
+                    Text("P's Paste may simulate ⌘V, so confirming an entry pastes it straight into the previous app.")
+                        .foregroundStyle(.secondary)
+                }
                 Button("Open Accessibility Settings…") {
                     NSWorkspace.shared.open(PasteService.accessibilitySettingsURL)
                 }
@@ -38,6 +42,10 @@ struct AboutSettingsTab: View {
         .formStyle(.grouped)
         .padding(Metrics.Settings.formPadding)
         .onAppear {
+            isAccessibilityTrusted = PasteService.isAccessibilityTrusted()
+        }
+        // The grant happens in System Settings; re-check on the way back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             isAccessibilityTrusted = PasteService.isAccessibilityTrusted()
         }
     }
