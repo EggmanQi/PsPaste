@@ -16,6 +16,8 @@ final class AppSettings {
         static let historyLimit = "historyLimit"
         static let retentionDays = "retentionDays"
         static let excludedBundleIDs = "excludedBundleIDs"
+        static let hotkeyKeyCode = "hotkeyKeyCode"
+        static let hotkeyModifiers = "hotkeyModifiers"
     }
 
     /// Value bounds and options. Pure constants, unit-tested.
@@ -64,6 +66,22 @@ final class AppSettings {
         }
     }
 
+    /// The global panel hot key (UI.md §4 General, Task 15). Mutable only
+    /// through `setHotKeyBinding` so the pair persists and applies
+    /// atomically; absent keys fall back to the default ⌘⇧`.
+    private(set) var hotkeyKeyCode: UInt32
+    private(set) var hotkeyModifiers: UInt32
+
+    /// Persists a new hot key binding (Task 15). The assembly's applier
+    /// registers it first and only calls this on success, so a persisted
+    /// binding always matches the live registration.
+    func setHotKeyBinding(_ binding: HotKeyBinding) {
+        hotkeyKeyCode = binding.keyCode
+        hotkeyModifiers = binding.modifiers
+        defaults.set(Int(binding.keyCode), forKey: Key.hotkeyKeyCode)
+        defaults.set(Int(binding.modifiers), forKey: Key.hotkeyModifiers)
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -74,5 +92,9 @@ final class AppSettings {
             ?? Limit.defaultRetentionDays
         self.excludedBundleIDs = defaults.stringArray(forKey: Key.excludedBundleIDs)
             ?? []
+        self.hotkeyKeyCode = defaults.object(forKey: Key.hotkeyKeyCode).flatMap { $0 as? Int }
+            .flatMap(UInt32.init) ?? HotKeyService.defaultKeyCode
+        self.hotkeyModifiers = defaults.object(forKey: Key.hotkeyModifiers).flatMap { $0 as? Int }
+            .flatMap(UInt32.init) ?? HotKeyService.defaultModifiers
     }
 }

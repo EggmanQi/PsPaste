@@ -1,3 +1,4 @@
+import Carbon
 import XCTest
 @testable import PsPaste
 
@@ -104,5 +105,56 @@ final class HotKeyServiceTests: XCTestCase {
                 interval: 30
             )
         )
+    }
+
+    // MARK: - Task 15: runtime rebind + recorder modifier mapping
+
+    func testRebindSuccessRegistersNewBinding() {
+        var attempts: [(UInt32, UInt32)] = []
+        let service = HotKeyService(
+            registerWithCarbon: { keyCode, modifiers in
+                attempts.append((keyCode, modifiers))
+                return true
+            }
+        )
+        _ = service.start()
+
+        let next = HotKeyBinding(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey))
+        XCTAssertTrue(service.rebind(to: next))
+        XCTAssertEqual(attempts.last?.0, next.keyCode)
+        XCTAssertEqual(attempts.last?.1, next.modifiers)
+    }
+
+    func testRebindFailureRestoresPreviousBinding() {
+        var attempts: [(UInt32, UInt32)] = []
+        var scripted = [true, false, true]
+        let service = HotKeyService(
+            registerWithCarbon: { keyCode, modifiers in
+                attempts.append((keyCode, modifiers))
+                return scripted.removeFirst()
+            }
+        )
+        _ = service.start()
+
+        let next = HotKeyBinding(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey))
+        XCTAssertFalse(service.rebind(to: next))
+
+        // Attempt consumed the old binding before failing; the restore call
+        // must re-register the previous one so the app is never hotkey-less.
+        XCTAssertEqual(attempts.count, 3)
+        XCTAssertEqual(attempts[2].0, HotKeyService.defaultKeyCode)
+        XCTAssertEqual(attempts[2].1, HotKeyService.defaultModifiers)
+    }
+
+    func testCarbonModifiersMapsCocoaFlagsToCarbonMask() {
+        XCTAssertEqual(
+            HotKeyService.carbonModifiers(from: [.command, .shift]),
+            UInt32(cmdKey | shiftKey)
+        )
+        XCTAssertEqual(
+            HotKeyService.carbonModifiers(from: [.control, .option]),
+            UInt32(controlKey | optionKey)
+        )
+        XCTAssertEqual(HotKeyService.carbonModifiers(from: []), 0)
     }
 }

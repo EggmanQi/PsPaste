@@ -45,7 +45,15 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController = SettingsWindowController(
             settings: settings,
             themeManager: ThemeManager.shared,
-            store: store
+            store: store,
+            // Recorder applier (Task 15-B): register the new binding first;
+            // persist only on success so a conflict keeps the old binding
+            // active and un-persisted.
+            hotKeyApplier: HotKeyApplier { [hotKeyService, settings] binding in
+                guard hotKeyService.rebind(to: binding) else { return false }
+                settings.setHotKeyBinding(binding)
+                return true
+            }
         )
         menuBarController = MenuBarController(
             monitor: monitor,
@@ -115,7 +123,12 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
         monitor.start()
-        hotKeyService.start()
+        // The persisted binding decides the hot key (Task 15); absent keys
+        // fall back to the default ⌘⇧` inside AppSettings.
+        hotKeyService.start(
+            keyCode: settings.hotkeyKeyCode,
+            modifiers: settings.hotkeyModifiers
+        )
         // Stale sweep at launch, then every 24h (ARCHITECTURE §3 rule 2).
         store.evictStale()
         store.startEvictionTimer()

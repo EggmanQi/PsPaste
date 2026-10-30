@@ -1,3 +1,4 @@
+import AppKit
 import Carbon
 import Foundation
 
@@ -34,6 +35,18 @@ final class HotKeyService {
         interval: TimeInterval
     ) -> Bool {
         now.timeIntervalSince(lastFailureAt) >= interval
+    }
+
+    /// NSEvent device-independent modifier flags → Carbon modifier mask
+    /// (Task 15 recorder). The bit layouts differ between the two APIs, so
+    /// map explicitly.
+    nonisolated static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+        var carbon: UInt32 = 0
+        if flags.contains(.control) { carbon |= UInt32(controlKey) }
+        if flags.contains(.option) { carbon |= UInt32(optionKey) }
+        if flags.contains(.shift) { carbon |= UInt32(shiftKey) }
+        if flags.contains(.command) { carbon |= UInt32(cmdKey) }
+        return carbon
     }
 
     // Carbon artifacts are process-wide singletons in practice (only one
@@ -93,6 +106,20 @@ final class HotKeyService {
         retryTimer = nil
         Self.carbonUnregister()
         Self.pendingToggle = nil
+    }
+
+    /// Attempts a new binding at runtime (Task 15). Registration failure
+    /// releases the old binding first, so a conflicting hot key would
+    /// otherwise leave the app without any — restore the previous binding
+    /// and report the failure.
+    @discardableResult
+    func rebind(to binding: HotKeyBinding) -> Bool {
+        let previous = HotKeyBinding(keyCode: lastKeyCode, modifiers: lastModifiers)
+        guard start(keyCode: binding.keyCode, modifiers: binding.modifiers) else {
+            start(keyCode: previous.keyCode, modifiers: previous.modifiers)
+            return false
+        }
+        return true
     }
 
     /// Re-registers once the retry interval has elapsed. Timer entry point;

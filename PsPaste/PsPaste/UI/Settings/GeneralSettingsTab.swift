@@ -1,14 +1,37 @@
 import SwiftUI
 
-/// General settings (UI.md §4): history capacity, retention span, theme.
-/// All controls bind straight to `AppSettings` / `ThemeManager`; writes
-/// persist in `didSet` and propagate to the effective paths immediately.
+/// General settings (UI.md §4): launch at login, panel shortcut, history
+/// capacity, retention span, theme. All controls bind straight to
+/// `AppSettings` / `ThemeManager` / `LaunchAtLoginController`; writes take
+/// effect immediately and persist for the next launch.
 struct GeneralSettingsTab: View {
     @Environment(AppSettings.self) private var settings
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(\.hotKeyApplier) private var hotKeyApplier
+
+    /// Bounces the launch toggle back by forcing a re-read of the
+    /// SMAppService-backed binding when a toggle attempt fails.
+    @State private var launchStatusRefresh = false
+    @State private var launchError: String?
 
     var body: some View {
         Form {
+            Section("Launch") {
+                Toggle(
+                    "Launch at login",
+                    isOn: launchAtLoginBinding
+                )
+                .id(launchStatusRefresh)
+                if let launchError {
+                    Text(launchError)
+                        .foregroundStyle(.red)
+                }
+            }
+            Section("Shortcut") {
+                ShortcutRecorder(current: currentBinding) { binding in
+                    hotKeyApplier.attempt(binding)
+                }
+            }
             Section("History") {
                 Stepper(
                     "Keep at most \(settings.historyLimit) items",
@@ -33,6 +56,28 @@ struct GeneralSettingsTab: View {
         }
         .formStyle(.grouped)
         .padding(Metrics.Settings.formPadding)
+    }
+
+    private var currentBinding: HotKeyBinding {
+        HotKeyBinding(keyCode: settings.hotkeyKeyCode, modifiers: settings.hotkeyModifiers)
+    }
+
+    /// SMAppService is the single source of truth (Task 15-A): the binding
+    /// always re-reads status, so a failed toggle visibly bounces back once
+    /// the forced refresh re-renders the control.
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { LaunchAtLoginController.isEnabled() },
+            set: { enabled in
+                launchError = nil
+                guard LaunchAtLoginController.setEnabled(enabled) else {
+                    launchError = "Could not update the login item. Is the app in /Applications?"
+                    launchStatusRefresh.toggle()
+                    return
+                }
+                launchStatusRefresh.toggle()
+            }
+        )
     }
 
     /// ThemeManager persists in `currentIndex.didSet`; the picker binds to

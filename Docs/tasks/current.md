@@ -1,53 +1,50 @@
 # 当前任务单
 
 > 给开发协作者（Kimi Code）：先读本文件，再读 `../ARCHITECTURE.md`、
-> `../UI.md`（§2.3 交互、§3 菜单栏、§4 设置窗口、§5.2 主题系统）。
+> `../UI.md`（§3 菜单栏、§4 设置窗口——通用 Tab 补完）。
 > 完成后更新 `../ROADMAP.md`；实现若偏离文档，回写对应文档。
 
-## 任务十四：设置窗口 v1 + 排除应用管理 + 搜索增强（2026-10-30）
+## 任务十五：开机启动 + 快捷键修改（2026-10-30，通用 Tab 闭环）
 
-### 背景（M2 推进）
+### 背景（M2 收尾项）
 
-- 菜单栏已有 "Settings…" 禁用占位（UI.md §3），本期落地为真窗口。
-- ARCH §4 跳过规则里已有"排除 App"，但排除列表此前无管理界面——本期
-  把排除应用做成设置项（UserDefaults 持久化），并支持从运行中 App 选取。
-- 搜索从"仅 text 字段 contains"增强为搜索完整版。
+- UI.md §4 通用 Tab 规格中"快捷键修改、开机启动"两项本期落地，完成后
+  通用 Tab 规格闭环。
+- 现状：全局热键写死 ⌘⇧`（kVK_ANSI_Grave）；无登录项；设置窗口
+  （任务十四）已有通用/隐私/关于三 Tab 与 UserDefaults 设置模式
+  （`Settings` 类），本期沿用该模式扩展。
 
-### 子任务 A：设置窗口 v1（UI.md §4，只做通用/隐私/关于）
+### 子任务 A：开机启动
 
-- macOS 原生 `Settings` Scene（SwiftUI）或 NSWindowController + TabView，
-  与现有 AppKit 委托结构协调（勿破坏 LSUIElement 关闭期的 Dock 可见
-  开发与菜单栏入口；⌘, 接通）。
-- **通用 Tab**：历史上限（默认 1000，数字输入，写回 store.historyLimit
-  生效路径）；保留时长（30 天，与 Eviction.staleTTL 打通——做成可调则
-  两值同源）；主题选择（复用 ThemeManager 全部主题，Radio/Picker）。
-- **隐私 Tab**：排除应用列表（显示 App 名 + Bundle ID + 图标，添加/
-  移除）；**从运行中 App 选取**（NSWorkspace 枚举前台可激活应用，面板
-  选择后写入排除列表）；清空历史按钮（确认后清空 DB + payload 目录）。
-- **关于 Tab**：版本号（从 Bundle 读）、辅助功能权限状态 + 授权入口
-  （复用菜单栏已有逻辑）。
-- 同步 Tab **不做**（iCloud 阻塞于付费账号，占位注明 Coming soon 即可，
-  或直接不出现在 v1——实现时选后者，少一个死 Tab）。
-- 所有设置读写 UserDefaults 语义键，默认值与现状一致（零迁移）。
+- 用 `SMAppService.mainApp`（macOS 13+，部署目标 14.0 满足）注册/
+  注销登录项；通用 Tab 增加 "Launch at login" Toggle。
+- **状态读取以 SMAppService 为唯一事实源**（`SMAppService.mainApp
+  .status`），不写 UserDefaults 镜像，避免两处失同步。
+- 注册失败（罕见，如 App 未进 /Applications）时 Toggle 回弹并显示
+  一行错误说明。
 
-### 子任务 B：排除应用生效链路
+### 子任务 B：快捷键修改
 
-- ClipboardMonitor 的"排除 App"规则改为读 UserDefaults 列表（目前
-  是写死或注入的——以 ARCH §4 现状为准改造），列表变化即时生效
-  （排除列表变化时捕获线程下一次轮询即遵守，无需重启）。
-- 面板显示不做处理（被排除 App 的复制静默跳过，符合预期）。
-
-### 子任务 C：搜索增强（UI.md §2.3 完整版）
-
-- 过滤字段从 text 扩展到：**text + 来源 App 名**（大小写不敏感 contains）。
-- 实现从内存 filter 改为 SwiftData `#Predicate`（1000 条规模仍轻），
-  保持 @Query 实时刷新语义。
-- 现有搜索交互（输入即过滤、Esc、选中回落任务九逻辑）全部不变。
+- 通用 Tab 增加快捷键录制器：
+  - 显示当前绑定文本（如 `⌘⇧\``）；点击"Record"进入录制态，下一组
+    按键即新绑定；Esc 取消录制。
+  - **校验规则**：必须含 ≥1 修饰键（纯功能键/纯字母不可注册全局热键）；
+    不接受纯修饰键组合；录制态捕获 keyCode + modifiers。
+  - 冲突处理：试注册失败（Carbon 返回错误，复用任务四的失败状态/
+    重试机制展示）→ 录制器内联显示 "Shortcut in use"，**保留旧绑定**。
+  - 成功则持久化（UserDefaults 语义键，如 `hotkeyKeyCode` /
+    `hotkeyModifiers`）并运行时重注册——**不重开 App 即生效**。
+- HotKeyService 改造：启动时从 UserDefaults 读绑定（缺省 = 默认 ⌘⇧`），
+  绑定变化时 cancel 旧注册 + 注册新键；任务四的失败可见性/30s 重试
+  语义对自定义绑定同样适用。
+- 校验/序列化抽纯函数（可测：modifier 集合判定、绑定持久化 round-trip、
+  非法组合拒绝）。
 
 ### 验收
 
-- A 类：全量测试通过（新增：设置读写 round-trip、排除列表变化生效、
-  predicate 搜索命中 text/来源 App）；Debug 0 error 0 警告；无魔数。
-- B 类（人工，待用户验证）：⌘, 打开设置；改历史上限/保留时长生效；
-  从运行中 App 选取排除后该 App 复制不入库；清空历史后面板为空；
-  搜索来源 App 名可命中；三处设置重启后保持。
+- A 类：全量测试通过（新增录制校验、持久化 round-trip、SMAppService
+  状态读用的可测部分——SMAppService 本体不可测则注入协议包装）；
+  Debug 0 error 0 警告；无魔数；设置键名集中定义不复用散字符串。
+- B 类（人工，待用户验证）：登录项在系统设置中可见且开关一致；改键后
+  新热键即刻唤出面板；冲突键显示占用提示且旧键仍可用；Esc 取消录制；
+  重启 App 后自定义绑定保持；默认 ⌘⇧` 行为对老用户不变。

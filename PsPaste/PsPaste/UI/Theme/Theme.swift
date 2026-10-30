@@ -158,6 +158,9 @@ enum Metrics {
         static let rowVerticalPadding: CGFloat = 4
         static let pickerWidth: CGFloat = 420
         static let pickerHeight: CGFloat = 320
+        /// Shortcut recorder (General tab, Task 15).
+        static let recorderSpacing: CGFloat = 12
+        static let shortcutLabelMinWidth: CGFloat = 96
     }
 }
 

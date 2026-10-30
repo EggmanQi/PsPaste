@@ -64,4 +64,22 @@ final class AppSettingsTests: XCTestCase {
         settings.retentionDays = 14
         XCTAssertEqual(settings.staleTTL, 14 * 24 * 60 * 60, accuracy: 0.001)
     }
+
+    // MARK: - Task 15: hot key binding persistence
+
+    func testHotKeyBindingDefaultsToCommandShiftGrave() {
+        let settings = AppSettings(defaults: defaults)
+        XCTAssertEqual(settings.hotkeyKeyCode, HotKeyService.defaultKeyCode)
+        XCTAssertEqual(settings.hotkeyModifiers, HotKeyService.defaultModifiers)
+    }
+
+    func testHotKeyBindingRoundTripPersistsBothParts() {
+        let settings = AppSettings(defaults: defaults)
+        let binding = HotKeyBinding(keyCode: 0x09, modifiers: 0x0A00) // ⌘⌥V, layout-independent values
+        settings.setHotKeyBinding(binding)
+
+        let reloaded = AppSettings(defaults: defaults)
+        XCTAssertEqual(reloaded.hotkeyKeyCode, binding.keyCode)
+        XCTAssertEqual(reloaded.hotkeyModifiers, binding.modifiers)
+    }
 }

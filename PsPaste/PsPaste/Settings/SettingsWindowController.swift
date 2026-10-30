@@ -12,7 +12,12 @@ final class SettingsWindowController: NSWindowController {
     /// content's minimum (Metrics.Settings.minContent*).
     private static let windowSize = NSSize(width: 560, height: 480)
 
-    init(settings: AppSettings, themeManager: ThemeManager, store: ClipboardStore) {
+    init(
+        settings: AppSettings,
+        themeManager: ThemeManager,
+        store: ClipboardStore,
+        hotKeyApplier: HotKeyApplier
+    ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: Self.windowSize.width, height: Self.windowSize.height),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -24,6 +29,7 @@ final class SettingsWindowController: NSWindowController {
             rootView: SettingsView(store: store)
                 .environment(settings)
                 .environment(themeManager)
+                .environment(\.hotKeyApplier, hotKeyApplier)
         )
         window.center()
         super.init(window: window)

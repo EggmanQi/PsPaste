@@ -27,10 +27,11 @@
 
 ### M2 — MVP 完整（对齐 PRD 全部 F1–F12）
 - [x] 任务十四：设置窗口 v1 + 排除应用管理 + 搜索增强（2026-10-30 完成，A 类已过；B 类人工验证待确认）
+- [x] 任务十五：开机启动 + 快捷键修改（2026-10-30 完成，通用 Tab 闭环，A 类已过；B 类人工验证待确认）
 - [x] 搜索过滤（任务十四完整版：text + 来源 App 名，`#Predicate`）
 - [ ] Pinboard（单收藏夹）
 - [x] 排除应用列表（任务十四）、敏感内容跳过（任务二）、暂停捕获（任务三）
-- [x] 设置窗口 v1（任务十四）、历史清理策略（任务十二 + 任务十四可调）
+- [x] 设置窗口（任务十四 v1 + 任务十五通用 Tab 闭环）、历史清理策略（任务十二 + 任务十四可调）
 - [ ] iCloud（CloudKit 私有容器）同步 + 同步状态展示
 - [ ] 按 PRD §6 用户故事逐条验收
 
@@ -247,3 +248,27 @@
   App 选取排除后该 App 复制不入库、清空历史后面板为空、搜索来源 App
   名可命中、三处设置重启后保持、设置窗口观感（含设置内切换主题后面板
   即时换肤）。
+- 2026-10-30：任务十五完成（开机启动 + 快捷键修改，通用 Tab 闭环）。
+  ①开机启动：`LaunchAtLoginController` 包装 `SMAppService.mainApp`
+  （macOS 13+，部署 14.0 满足），状态以 SMAppService 为唯一事实源、
+  不写 UserDefaults 镜像；可注入 `LoginItemManaging` 协议（SMAppService
+  挂扩展满足），mock 可测；通用 Tab "Launch at login" Toggle，注册失败
+  回弹并内联错误说明。②快捷键修改：`HotKeyBinding` 值类型（keyCode +
+  Carbon modifiers），`isRegistrable` 纯函数（≥1 修饰键且鍵本身非修饰键，
+  左右修饰鍵碼集 kVK 常數）、`displayString` 純函數（⌃⌥⇧⌘ 菜單序 +
+  注入式字元提供者，實際字形走 UCKeyTranslate 讀當前鍵盤佈局——B 類人工）；
+  AppSettings 新增 hotkeyKeyCode/hotkeyModifiers 語義鍵（集中 Key 枚舉），
+  `setHotKeyBinding` 原子持久化；HotKeyService 新增 `rebind(to:)`——
+  試註冊失敗自動恢復舊綁定（註冊嘗試會先釋放舊熱鍵，不恢復會讓 App 無熱鍵
+  可用）+ `carbonModifiers(from:)` NSEvent→Carbon 位映射；`ShortcutRecorder`
+  錄製組件（Record/Cancel、Esc 取消、非法組合內聯提示、衝突 "Shortcut in
+  use" 且保留舊綁定），經 `HotKeyApplier` 環境值橋接裝配（先註冊成功才持久化）；
+  啟動時從 UserDefaults 讀綁定，缺省 = 默認 ⌘⇧`（老用戶零遷移），
+  任務四失敗可見性/30s 重試語義對自定義綁定同樣適用。
+  版本號 1.1.3 → 1.2.0（重要功能）。新增 15 個單測（HotKeyBinding 校驗/
+  顯示、rebind 成功/失敗恢復、carbon 映射、登錄項 mock 三態、綁定 round-trip），
+  xcodebuild test 106/106 通過、編譯 0 error 0 警告。
+  ARCHITECTURE §6、UI.md §4 已回写。B 类待人工：登录项在系统设置可见且
+  开关一致、改键后新热键即刻唤出、冲突键显示占用且旧键仍可用、Esc 取消
+  录制、重启 App 后自定义绑定保持、默认 ⌘⇧` 对老用户不变、键位字形在
+  不同键盘布局下显示正确。

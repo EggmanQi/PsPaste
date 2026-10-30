@@ -36,6 +36,7 @@ PsPaste (app target)
 ├── PasteService          # 写回剪贴板 + 辅助功能权限检测 + 模拟 ⌘V
 ├── Settings              # AppSettings（UserDefaults 语义键，变更回调即时生效）
 │                         # + SettingsWindowController（NSWindowController + TabView）
+│                         # + LaunchAtLoginController（SMAppService 登录项，可注入协议）
 └── UI (SwiftUI)          # HistoryPanelView / HistoryItemsView / CardView /
                           # SettingsView / MenuBarView
                           # 视觉样式集中在 Theme/ 下（任务十一起：Theme 协议 +
@@ -113,8 +114,10 @@ PsPaste (app target)
 
 ## 6. 全局热键（HotKeyService）
 
-- 沙盒外分发，使用 **Carbon `RegisterEventHotKey`**（当前默认 ⌘⇧`，因 ⌘⇧V 被 Paste.app 占用；M2 设置窗口可配置）。
-- 与系统/常见 App 冲突时在设置中提示并允许修改。
+- 沙盒外分发，使用 **Carbon `RegisterEventHotKey`**（当前默认 ⌘⇧`，因 ⌘⇧V 被 Paste.app 占用）。
+- 与系统/常见 App 冲突时在设置中提示并允许修改（任务四失败状态 + 30s 重试；
+  任务十五起可在设置 ▸ 通用录制自定义绑定：先注册成功才持久化，冲突保留旧绑定；
+  绑定存 UserDefaults 语义键 `hotkeyKeyCode`/`hotkeyModifiers`，重启保持）。
 
 ## 7. 粘贴（PasteService）
 
