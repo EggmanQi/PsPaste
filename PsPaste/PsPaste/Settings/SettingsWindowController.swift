@@ -33,10 +33,37 @@ final class SettingsWindowController: NSWindowController {
         fatalError("init(coder:) is not supported")
     }
 
+    /// Non-nil while an activation request is pending. `NSApp.activate()`
+    /// completes asynchronously; ordering the window front before the
+    /// activation lands leaves it buried behind the previously active app
+    /// and without key status (the re-trigger case: settings open, focus
+    /// moved elsewhere, button pressed again).
+    private var activationObserver: NSObjectProtocol?
+
     func showSettings() {
-        // LSUIElement-agnostic: bring ourselves forward so the window appears.
-        NSApp.activate()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+        guard !NSApp.isActive else { return }
+
+        NSApp.activate()
+        if let activationObserver {
+            NotificationCenter.default.removeObserver(activationObserver)
+        }
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // The queue is .main, so isolation is guaranteed at runtime.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.showWindow(nil)
+                self.window?.makeKeyAndOrderFront(nil)
+                if let observer = self.activationObserver {
+                    NotificationCenter.default.removeObserver(observer)
+                    self.activationObserver = nil
+                }
+            }
+        }
     }
 }
