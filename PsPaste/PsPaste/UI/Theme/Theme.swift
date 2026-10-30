@@ -88,6 +88,9 @@ enum Metrics {
 
     enum Card {
         static let width: CGFloat = 240
+        /// Square cell: the card is always exactly as tall as it is wide,
+        /// selected or not — selection only lifts and restyles it (§2.2 v5).
+        static let height: CGFloat = width
         static let spacing: CGFloat = 14
         static let padding: CGFloat = 12
         static let contentSpacing: CGFloat = 4
@@ -97,12 +100,10 @@ enum Metrics {
         static let borderWidth: CGFloat = 1
         static let doubleTapInterval: TimeInterval = 0.3
         static let contentLineLimit = 8
-        /// Breathing room between the card row and the divider / panel bottom
-        /// edge (§5.1 v4 spacing grid). The history area centers the card row,
-        /// so `height` plus twice this margin must equal the area below the
-        /// top bar.
+        /// Breathing room between the lifted selected card and the divider
+        /// (§5.1 v4 spacing grid), and the minimum gap between the action
+        /// row slot and the panel bottom edge.
         static let verticalMargin: CGFloat = 14
-        static let height = Panel.height - Panel.topBarHeight - 2 * verticalMargin
 
         /// v5 (UI.md §2.2): the selected card rises to make room for the
         /// action icon row in the reserved slot below every card.
@@ -114,6 +115,12 @@ enum Metrics {
         static let actionRowHeight: CGFloat = 22
         static let actionRowSpacing: CGFloat = 8
         static let actionIconSize: CGFloat = 22
+        /// Reserved space above the card row: the selection lift plus the
+        /// margin the lifted card must keep from the divider.
+        static let topInset: CGFloat = selectionLift + verticalMargin
+        /// Reserved space below the action row slot so the buttons never
+        /// hug the panel bottom edge.
+        static let bottomInset: CGFloat = verticalMargin
         /// Restrained pin badge on pinned, unselected cards.
         static let pinBadgeSize: CGFloat = 10
         static let pinBadgeInset: CGFloat = 6

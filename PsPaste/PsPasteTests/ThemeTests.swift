@@ -2,17 +2,30 @@ import SwiftUI
 import XCTest
 @testable import PsPaste
 
-/// Layout invariants of the §5.1 spacing grid: the card row must float with
-/// symmetric vertical margins inside the history area, never hug the divider
-/// or leave a dead strip at the panel bottom. The grid is a cross-theme
-/// invariant (UI.md §5.2), so it lives in Metrics, not in any theme.
+/// Layout invariants of the §5.1 spacing grid: the card cell is square, and
+/// the selected card's lift plus the action row slot must fit below the top
+/// bar with margins, so nothing hugs the divider or the panel bottom edge.
+/// The grid is a cross-theme invariant (UI.md §5.2), so it lives in Metrics,
+/// not in any theme.
 final class ThemeTests: XCTestCase {
 
-    func testCardHeightPlusVerticalMarginsFillsAreaBelowTopBar() {
-        XCTAssertEqual(
-            Metrics.Card.height + 2 * Metrics.Card.verticalMargin,
-            Metrics.Panel.height - Metrics.Panel.topBarHeight,
-            accuracy: 0.001
+    func testCardIsSquare() {
+        XCTAssertEqual(Metrics.Card.height, Metrics.Card.width, accuracy: 0.001)
+    }
+
+    func testLiftedCardAndActionRowFitBelowTopBarWithMargins() {
+        // Selected layout, top to bottom: lift + top margin, the square card,
+        // the action row slot, and the bottom margin must fit inside the area
+        // below the top bar with room to spare.
+        let stack = Metrics.Card.selectionLift
+            + Metrics.Card.verticalMargin
+            + Metrics.Card.height
+            + Metrics.Card.actionRowSpacing
+            + Metrics.Card.actionRowHeight
+            + Metrics.Card.bottomInset
+        XCTAssertLessThanOrEqual(
+            stack,
+            Metrics.Panel.height - Metrics.Panel.topBarHeight
         )
     }
 

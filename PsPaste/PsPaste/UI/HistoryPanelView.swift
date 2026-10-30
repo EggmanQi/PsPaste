@@ -136,11 +136,11 @@ struct HistoryPanelView: View {
 
     private var historyArea: some View {
         ScrollViewReader { proxy in
-            // No fixed height here: the area fills the space below the top bar
-            // and the card row centers inside it, leaving verticalMargin above
-            // and below (§5.1 spacing grid) instead of hugging the divider.
+            // Top-aligned row: the per-item insets below reserve the selection
+            // lift plus the divider margin above and a bottom-edge margin below,
+            // so the lifted card and its action row never touch the panel edges.
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: Metrics.Card.spacing) {
+                LazyHStack(alignment: .top, spacing: Metrics.Card.spacing) {
                     ForEach(items, id: \.id) { item in
                         let selected = item.id == effectiveSelectedID
                         VStack(spacing: Metrics.Card.actionRowSpacing) {
@@ -166,6 +166,8 @@ struct HistoryPanelView: View {
                             .opacity(selected ? 1 : 0)
                             .allowsHitTesting(selected)
                         }
+                        .padding(.top, Metrics.Card.topInset)
+                        .padding(.bottom, Metrics.Card.bottomInset)
                         .animation(
                             .easeOut(duration: Metrics.Card.selectionLiftDuration),
                             value: selected
@@ -174,8 +176,7 @@ struct HistoryPanelView: View {
                     }
                 }
                 .padding(.horizontal, Metrics.Card.spacing)
-                .frame(height: Metrics.Card.height)
-                .frame(maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .overlay {
                 if items.isEmpty {
