@@ -85,14 +85,17 @@ final class ClipboardMonitorTests: XCTestCase {
         XCTAssertEqual(captured.map(\.text), ["after resume"])
     }
 
-    func testOwnWriteBackIsNotCaptured() {
-        monitor.markNextPasteboardWriteAsOwn()
-        copyText("own write-back")
-        XCTAssertTrue(captured.isEmpty)
+    /// URL strings must survive to paste-back (ARCHITECTURE §4, lossless
+    /// restore), so they are kept as payloads as well as the text fallback.
+    func testURLRepresentationsAreKeptAsPayloads() {
+        let item = MockPasteboardItem()
+        item.setString("https://onev.cat", forType: NSPasteboard.PasteboardType("public.url"))
+        pasteboard.simulateCopy(declaredTypes: [NSPasteboard.PasteboardType("public.url")], items: [item])
+        monitor.checkNow()
 
-        // Only the next change is ignored; later copies capture normally.
-        copyText("real copy")
-        XCTAssertEqual(captured.map(\.text), ["real copy"])
+        XCTAssertEqual(captured.first?.text, "https://onev.cat")
+        XCTAssertEqual(captured.first?.payloads.map(\.type), ["public.url"])
+        XCTAssertEqual(captured.first?.payloads.first?.data, Data("https://onev.cat".utf8))
     }
 
     // MARK: - Task 8-D: corrupt image payloads never reach storage

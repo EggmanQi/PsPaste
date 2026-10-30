@@ -31,23 +31,37 @@ enum PasteService {
     )!
 
     /// Restores the plain text plus every stored payload representation.
-    /// Call `ClipboardMonitor.markNextPasteboardWriteAsOwn()` first to prevent
-    /// the monitor from recording this write-back.
-    static func restoreToGeneralPasteboard(
+    ///
+    /// The write-back carries the TransientType marker, so neither our
+    /// monitor nor other clipboard managers record it again (ARCHITECTURE §4
+    /// rule 4). A type that occurs more than once (e.g. several copied files)
+    /// gets one pasteboard item per occurrence, in captured order.
+    static func restore(
         _ item: ClipboardItem,
-        payloads: [(type: String, data: Data)]
+        payloads: [(type: String, data: Data)],
+        to pasteboard: NSPasteboard = .general
     ) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-
-        let boardItem = NSPasteboardItem()
+        let first = NSPasteboardItem()
+        first.setData(Data(), forType: .transientMarker)
         if let text = item.text, !text.isEmpty {
-            boardItem.setString(text, forType: .string)
+            first.setString(text, forType: .string)
         }
+
+        var boardItems = [first]
         for payload in payloads {
-            boardItem.setData(payload.data, forType: NSPasteboard.PasteboardType(payload.type))
+            let type = NSPasteboard.PasteboardType(payload.type)
+            let target: NSPasteboardItem
+            if let free = boardItems.first(where: { !$0.types.contains(type) }) {
+                target = free
+            } else {
+                target = NSPasteboardItem()
+                boardItems.append(target)
+            }
+            target.setData(payload.data, forType: type)
         }
-        pasteboard.writeObjects([boardItem])
+
+        pasteboard.clearContents()
+        pasteboard.writeObjects(boardItems)
     }
 
     /// Posts key down + key up for ⌘V to the HID event tap.

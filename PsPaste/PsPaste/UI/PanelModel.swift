@@ -68,11 +68,12 @@ final class PanelModel {
         self.selectedID = ids[next]
     }
 
-    /// Return / double-click on the effective selection.
+    /// Return / double-click on the effective selection. The restore handler
+    /// decides when the panel closes: at once before a direct paste, after
+    /// the manual-paste hint when pasting is not permitted.
     func confirmSelection(in items: [ClipboardItem]) {
         guard let item = effectiveSelection(in: items) else { return }
         onRestore?(item)
-        onRequestClose?()
     }
 
     /// Esc: clear search first, close only when search is already empty.

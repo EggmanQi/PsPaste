@@ -122,7 +122,7 @@ struct HistoryItemsView: View {
         VStack(spacing: Metrics.EmptyState.spacing) {
             Text("Copy something to get started")
                 .font(theme.emptyStateTitleFont)
-            Text("Press ⌘⇧` anywhere to open this panel")
+            Text("Press \(settings.hotKeyBinding.displayText) anywhere to open this panel")
                 .font(theme.emptyStateSubtitleFont)
                 .foregroundStyle(theme.secondaryText(colorScheme))
         }
@@ -130,6 +130,7 @@ struct HistoryItemsView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(AppSettings.self) private var settings
 
     private var theme: any Theme { themeManager.current }
 }

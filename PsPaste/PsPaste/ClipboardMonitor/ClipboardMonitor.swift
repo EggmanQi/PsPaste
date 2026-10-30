@@ -25,6 +25,13 @@ extension NSPasteboard: PasteboardReading {
 
 extension NSPasteboardItem: PasteboardItemReading {}
 
+/// Pasteboard markers that identify sensitive or ephemeral content
+/// (nspasteboard.org conventions, F10).
+extension NSPasteboard.PasteboardType {
+    nonisolated static let concealedMarker = Self("org.nspasteboard.ConcealedType")
+    nonisolated static let transientMarker = Self("org.nspasteboard.TransientType")
+}
+
 /// One accepted pasteboard change, ready for persistence.
 struct ClipboardSnapshot {
     /// All captured UTIs from this copy, in canonical order.
@@ -43,16 +50,11 @@ struct ClipboardSnapshot {
 /// Polls the general pasteboard and emits snapshots for accepted changes.
 ///
 /// Skip rules, in order (ARCHITECTURE §4):
-/// concealed/transient types, excluded source apps, duplicate hash (via
-/// `shouldSkipCapture`), and self-originated write-backs (reserved for Task 3).
+/// concealed/transient types (this also covers our own write-backs, which
+/// `PasteService` marks transient), excluded source apps, and duplicate
+/// hash (via `shouldSkipCapture`).
 @Observable
 final class ClipboardMonitor {
-
-    /// Pasteboard markers that identify sensitive or ephemeral content (F10).
-    private enum MarkerType {
-        static let concealed = "org.nspasteboard.ConcealedType"
-        static let transient = "org.nspasteboard.TransientType"
-    }
 
     /// UTIs read from each pasteboard item, in priority order.
     private static let capturedTypes: [NSPasteboard.PasteboardType] = [
@@ -68,6 +70,12 @@ final class ClipboardMonitor {
     /// Types stored as payload files rather than in the database.
     private static let payloadTypes: Set<String> = [
         "public.rtf", "public.html", "public.png", "public.tiff",
+    ]
+
+    /// String types that are also kept as payloads: the database text holds
+    /// only one of them, but paste-back needs every URL (ARCHITECTURE §4).
+    private static let urlTypes: Set<NSPasteboard.PasteboardType> = [
+        .init("public.url"), .init("public.file-url"),
     ]
 
     /// Wired to storage by the app; called on the main actor for each accepted change.
@@ -91,7 +99,6 @@ final class ClipboardMonitor {
     private let pasteboard: any PasteboardReading
     private var timer: Timer?
     private var lastChangeCount: Int
-    private var ignoreNextChange = false
 
     init(pasteboard: any PasteboardReading = NSPasteboard.general) {
         self.pasteboard = pasteboard
@@ -119,12 +126,6 @@ final class ClipboardMonitor {
         isPaused = paused
     }
 
-    /// Reserved for PasteService (Task 3): call before writing the app's own data
-    /// back to the pasteboard so the write-back is not captured again.
-    func markNextPasteboardWriteAsOwn() {
-        ignoreNextChange = true
-    }
-
     /// Runs one poll cycle synchronously. Exposed for tests; production polls via the timer.
     func checkNow() {
         poll()
@@ -136,17 +137,10 @@ final class ClipboardMonitor {
 
         guard !isPaused else { return }
 
-        if ignoreNextChange {
-            ignoreNextChange = false
-            return
-        }
-
         let pasteboardTypes = pasteboard.declaredTypes
-        guard !pasteboardTypes.isEmpty else { return }
-        let rawTypes = Set(pasteboardTypes.map(\.rawValue))
-        guard !rawTypes.contains(MarkerType.concealed), !rawTypes.contains(MarkerType.transient) else {
-            return
-        }
+        guard !pasteboardTypes.isEmpty,
+              !pasteboardTypes.contains(.concealedMarker),
+              !pasteboardTypes.contains(.transientMarker) else { return }
 
         let sourceApp = frontmostAppInfo()
         if let bundleID = sourceApp.bundleID, excludedBundleIDs.contains(bundleID) { return }
@@ -183,6 +177,9 @@ final class ClipboardMonitor {
                         plainParts.append(string)
                     } else {
                         urlParts.append(string)
+                    }
+                    if Self.urlTypes.contains(type) {
+                        payloads.append((type.rawValue, Data(string.utf8)))
                     }
                 }
             }

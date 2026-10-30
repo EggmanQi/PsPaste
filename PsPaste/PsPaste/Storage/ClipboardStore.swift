@@ -94,7 +94,12 @@ final class ClipboardStore {
               let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else {
             return []
         }
-        return names.sorted().compactMap { name in
+        // File names are "<index>_<type>"; sort by the number so that a copy
+        // with ten or more payloads (e.g. a file list) keeps its order.
+        let ordered = names.sorted { lhs, rhs in
+            (Int(lhs.prefix { $0 != "_" }) ?? .max) < (Int(rhs.prefix { $0 != "_" }) ?? .max)
+        }
+        return ordered.compactMap { name in
             guard let separator = name.firstIndex(of: "_") else { return nil }
             let type = String(name[name.index(after: separator)...]).replacingOccurrences(of: "_", with: "/")
             guard let data = try? Data(contentsOf: directory.appendingPathComponent(name)) else { return nil }

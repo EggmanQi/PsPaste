@@ -98,6 +98,24 @@ final class PanelModelTests: XCTestCase {
         model.confirmSelection(in: items)
     }
 
+    /// The restore handler owns the dismissal: direct paste closes at once,
+    /// copy-only keeps the manual-paste hint visible before closing.
+    @MainActor
+    func testConfirmSelectionRestoresWithoutClosing() {
+        let model = PanelModel()
+        let items = [makeItem("a"), makeItem("b")]
+        var restored: ClipboardItem?
+        var closeRequests = 0
+        model.onRestore = { restored = $0 }
+        model.onRequestClose = { closeRequests += 1 }
+
+        model.selectViaMouse(items[1].id)
+        model.confirmSelection(in: items)
+
+        XCTAssertEqual(restored?.id, items[1].id)
+        XCTAssertEqual(closeRequests, 0)
+    }
+
     @MainActor
     func testArrowFromNilSelectsFirstItem() {
         let model = PanelModel()

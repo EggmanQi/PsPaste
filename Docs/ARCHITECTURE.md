@@ -92,14 +92,18 @@ PsPaste (app target)
 - `Timer`（~0.5s）轮询 `NSPasteboard.general.changeCount`，变化才读取。
 - 一次复制包含多个 UTI representation：保留全部常见类型
   （`public.utf8-plain-text`、`public.rtf`、`public.html`、`public.png`、`public.tiff`、`public.url`、`public.file-url`），
-  存 `contentTypes` 以便粘贴时无损还原。
+  存 `contentTypes` 以便粘贴时无损还原。`public.url` / `public.file-url` 字符串
+  除参与 `text` 回退外，也作为 payload 落盘（2026-10-30），写回时按出现次数
+  分摊到多个 pasteboard item（多文件复制可还原为多个文件）。
 - 跳过规则（按顺序）：
   1. 含 `org.nspasteboard.ConcealedType` 或 `TransientType` → 不记录；
   2. 来源 App 在排除列表 → 不记录（任务十四起列表存 UserDefaults 语义键，
      经 `AppSettings` 变更回调驱动 `ClipboardMonitor.excludedBundleIDs`，
      下一次轮询即生效，无需重启；设置窗口隐私 Tab 管理）；
   3. 内容 hash 与最新一条相同 → 不重复记录；
-  4. 来源是自身（PasteService 写回时打 `org.nspasteboard.TransientType` 或内部标记）→ 不回环记录。
+  4. 来源是自身：PasteService 写回时打 `org.nspasteboard.TransientType`，由规则 1
+     跳过 → 不回环记录。（2026-10-30 起取消"忽略下一次变化"的内部标记：
+     中间任意一次外部变化都会吃掉该标记，写回失败还会吞掉下一次真实复制。）
 - 捕获暂停时停止读取（继续轮询 changeCount 但直接跳过）。
 - 来源 App 探测：`NSWorkspace.frontmostApplication`，经可注入的
   `frontmostAppInfo` 提供（bundle id + 显示名），显示名随快照入库供搜索。
@@ -125,7 +129,9 @@ PsPaste (app target)
 2. 检查辅助功能权限（`AXIsProcessTrustedWithOptions`，不强制弹窗，设置里提供授权入口）。
 3. 有权限：收起面板 → 向之前的前台应用发送 `CGEvent` 模拟 ⌘V。
    无权限：仅写回剪贴板，面板顶部显示“已复制，按 ⌘V 粘贴”。
-4. 写回时做内部标记，避免 ClipboardMonitor 回环（见 §4）。
+4. 写回时打 TransientType 标记，避免 ClipboardMonitor 回环（见 §4）。
+5. 面板收起时机由粘贴处理方独占（`PanelModel.confirmSelection` 不收起）：
+   直接粘贴立即收起；仅复制时提示约 1.2s 后收起，期间重新唤出则不收起。
 
 ## 8. iCloud 同步注意
 

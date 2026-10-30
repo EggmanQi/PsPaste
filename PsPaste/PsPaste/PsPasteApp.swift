@@ -27,6 +27,7 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
     private let settingsWindowController: SettingsWindowController
     private let notifier = SystemNotifier()
     private let settings = AppSettings.shared
+    private var hintDismissal: Task<Void, Never>?
     private let appMenuOpenItem = NSMenuItem(
         title: "Open P's Paste",
         action: #selector(togglePanelFromMenu),
@@ -43,6 +44,8 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
                     // The active skin (UI.md §5.2); ThemeManager publishes
                     // changes, so theme switches re-render the panel.
                     .environment(ThemeManager.shared)
+                    // The empty state names the live hot key.
+                    .environment(AppSettings.shared)
             ),
             model: panelModel
         )
@@ -77,14 +80,10 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
             store.containsNewest(matchingHash: snapshot.contentHash)
         }
         panelModel.onRestore = { [weak self] item in self?.handleRestore(item) }
-        panelModel.onCopyOnly = { [monitor, store] item in
+        panelModel.onCopyOnly = { [store] item in
             // Copy-only: write back without pasting, closing, or re-recording
             // history — the TransientType mark prevents the re-capture (§2.2 v5).
-            monitor.markNextPasteboardWriteAsOwn()
-            PasteService.restoreToGeneralPasteboard(
-                item,
-                payloads: store.payloadContents(for: item)
-            )
+            PasteService.restore(item, payloads: store.payloadContents(for: item))
         }
         panelModel.onTogglePin = { [store] item in store.togglePin(item) }
         panelModel.onDelete = { [store] item in store.delete(item) }
@@ -105,6 +104,7 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
         }
         settings.onRetentionChange = { [store] ttl in
             store.staleTTL = ttl
+            store.evictStale()
         }
         settings.onExcludedBundleIDsChange = { [monitor] bundleIDs in
             monitor.excludedBundleIDs = Set(bundleIDs)
@@ -149,13 +149,11 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Paste (ARCHITECTURE §7)
 
+    /// Restore owns the panel dismissal (`PanelModel.confirmSelection` does
+    /// not close), because the two outcomes need different timing.
     private func handleRestore(_ item: ClipboardItem) {
         store.markUsed(item)
-        monitor.markNextPasteboardWriteAsOwn()
-        PasteService.restoreToGeneralPasteboard(
-            item,
-            payloads: store.payloadContents(for: item)
-        )
+        PasteService.restore(item, payloads: store.payloadContents(for: item))
 
         switch PasteService.action(
             isAccessibilityTrusted: PasteService.isAccessibilityTrusted()
@@ -170,7 +168,11 @@ final class PsPasteAppDelegate: NSObject, NSApplicationDelegate {
         case .copyOnly:
             panelModel.showsManualPasteHint = true
             // Keep the hint visible briefly, then dismiss the panel.
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1200)) {
+            hintDismissal?.cancel()
+            hintDismissal = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(1200))
+                // A re-summoned panel has reset the hint; leave it open.
+                guard let self, !Task.isCancelled, self.panelModel.showsManualPasteHint else { return }
                 self.panelModel.showsManualPasteHint = false
                 self.panelController.close()
             }

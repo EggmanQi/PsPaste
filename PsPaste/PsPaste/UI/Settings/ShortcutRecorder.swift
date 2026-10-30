@@ -27,6 +27,7 @@ struct ShortcutRecorder: View {
     @State private var showsConflict = false
     @State private var sink = RecordingSink()
     @State private var monitor: Any?
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
         HStack(spacing: Metrics.Settings.recorderSpacing) {
@@ -41,6 +42,13 @@ struct ShortcutRecorder: View {
                 }
             }
         }
+        // The local monitor sees key presses for every window of the app,
+        // so it must not outlive the key settings window (e.g. while the
+        // history panel takes the keyboard).
+        .onChange(of: controlActiveState) { _, state in
+            if state != .key { cancelRecording() }
+        }
+        .onDisappear { cancelRecording() }
         Group {
             if isRecording, let hint {
                 Text(hint)

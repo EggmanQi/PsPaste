@@ -108,6 +108,14 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertNotNil(store.imagePayload(for: item))
     }
 
+    func testPayloadContentsKeepCapturedOrderBeyondTenFiles() throws {
+        let urls = (0..<12).map { Data("file:///tmp/\($0)".utf8) }
+        store.save(snapshot(text: nil, payloads: urls.map { ("public.file-url", $0) }))
+
+        let item = try XCTUnwrap(allItems(in: store.modelContainer).first)
+        XCTAssertEqual(store.payloadContents(for: item).map(\.data), urls)
+    }
+
     func testContainsNewestMatchingHash() {
         let snapshot = snapshot(text: "dedup me")
         XCTAssertFalse(store.containsNewest(matchingHash: snapshot.contentHash))
